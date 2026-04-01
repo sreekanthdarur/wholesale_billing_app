@@ -1,0 +1,4 @@
+Scaffold v6 notes:
+- OCR extraction connected with Google ML Kit package.
+- Voice microphone capture connected with speech_to_text package.
+- Excel export added using excel package.
