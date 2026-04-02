@@ -59,9 +59,7 @@ class _InvoicePreviewUpdateScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Preview Update ${widget.invoiceNo}'),
-      ),
+      appBar: AppBar(title: Text('Preview Update ${widget.invoiceNo}')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

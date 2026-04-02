@@ -18,70 +18,99 @@ class HomeScreen extends StatelessWidget {
     final draftService = DraftInvoiceService();
 
     final menu = [
-      _HomeMenuItem('Create Manual Invoice', 'Draft -> preview -> save',
-          Icons.receipt_long, () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => DraftInvoiceEditorScreen(
-              title: 'Manual Invoice',
-              draft: draftService.createEmptyManualDraft(),
+      _HomeMenuItem(
+        'Create Manual Invoice',
+        'Draft -> preview -> save',
+        Icons.receipt_long,
+        () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => DraftInvoiceEditorScreen(
+                title: 'Manual Invoice',
+                draft: draftService.createEmptyManualDraft(),
+              ),
             ),
-          ),
-        );
-      }),
+          );
+        },
+      ),
       _HomeMenuItem(
-          'Saved Invoices', 'Today / month / date grouping', Icons.folder_open,
-          () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const SavedInvoicesScreen()),
-        );
-      }),
-      _HomeMenuItem('Manage Customers', 'Customer master CRUD', Icons.people,
-          () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const ManageCustomersScreen()),
-        );
-      }),
+        'Saved Invoices',
+        'Today / month / date grouping',
+        Icons.folder_open,
+        () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const SavedInvoicesScreen()),
+          );
+        },
+      ),
       _HomeMenuItem(
-          'Manage Items', 'Item master + aliases + prices', Icons.inventory_2,
-          () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const ManageItemsScreen()),
-        );
-      }),
+        'Manage Customers',
+        'Customer master CRUD',
+        Icons.people,
+        () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ManageCustomersScreen()),
+          );
+        },
+      ),
       _HomeMenuItem(
-          'Voice Invoice', 'Microphone -> transcript -> draft', Icons.mic, () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const VoiceInvoiceScreen()),
-        );
-      }),
+        'Manage Items',
+        'Item master + aliases + prices',
+        Icons.inventory_2,
+        () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ManageItemsScreen()),
+          );
+        },
+      ),
       _HomeMenuItem(
-          'Camera Invoice', 'Camera OCR -> draft -> confirm', Icons.camera_alt,
-          () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const CameraInvoiceScreen()),
-        );
-      }),
-      _HomeMenuItem('Auto Amount Invoice', 'Target value -> balanced draft',
-          Icons.auto_awesome, () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const AutoAmountInvoiceScreen()),
-        );
-      }),
+        'Voice Invoice',
+        'Microphone -> transcript -> draft',
+        Icons.mic,
+        () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const VoiceInvoiceScreen()),
+          );
+        },
+      ),
       _HomeMenuItem(
-          'Export Center', 'CSV / Excel foundation', Icons.file_download, () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const ExportScreen()),
-        );
-      }),
+        'Camera Invoice',
+        'Camera OCR -> draft -> confirm',
+        Icons.camera_alt,
+        () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const CameraInvoiceScreen()),
+          );
+        },
+      ),
+      _HomeMenuItem(
+        'Auto Amount Invoice',
+        'Target value -> balanced draft',
+        Icons.auto_awesome,
+        () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AutoAmountInvoiceScreen()),
+          );
+        },
+      ),
+      _HomeMenuItem(
+        'Export Center',
+        'CSV / Excel foundation',
+        Icons.file_download,
+        () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ExportScreen()),
+          );
+        },
+      ),
     ];
 
     return Scaffold(

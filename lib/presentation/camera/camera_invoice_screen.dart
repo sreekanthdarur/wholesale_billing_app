@@ -27,11 +27,49 @@ class _CameraInvoiceScreenState extends State<CameraInvoiceScreen> {
   final ImagePicker picker = ImagePicker();
 
   String invoiceType = AppConstants.invoiceTypes.first;
+  String ocrLanguage = 'en';
   XFile? selectedImage;
   bool extracting = false;
+  bool checkingBackend = true;
+  bool localBackendReady = false;
+  String backendMessage = 'Checking local OCR server...';
+
+  final Map<String, String> ocrLanguageOptions = const {
+    'en': 'English',
+    'hi': 'Hindi',
+    'te': 'Telugu',
+    'kn': 'Kannada',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBackend();
+  }
+
+  Future<void> _checkBackend() async {
+    setState(() {
+      checkingBackend = true;
+      backendMessage = 'Checking local OCR server...';
+    });
+
+    final result = await ocrService.healthCheck();
+    if (!mounted) return;
+
+    setState(() {
+      localBackendReady = result.ok && result.ocrReady;
+      checkingBackend = false;
+      backendMessage = result.ok
+          ? 'Local AI OCR is ready.'
+          : 'Local AI OCR unavailable. Device OCR fallback will be used.';
+    });
+  }
 
   Future<void> _pickFromCamera() async {
-    final image = await picker.pickImage(source: ImageSource.camera, imageQuality: 85);
+    final image = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 92,
+    );
     if (image == null) return;
     setState(() {
       selectedImage = image;
@@ -39,7 +77,10 @@ class _CameraInvoiceScreenState extends State<CameraInvoiceScreen> {
   }
 
   Future<void> _pickFromGallery() async {
-    final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    final image = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 92,
+    );
     if (image == null) return;
     setState(() {
       selectedImage = image;
@@ -49,7 +90,9 @@ class _CameraInvoiceScreenState extends State<CameraInvoiceScreen> {
   Future<void> _extractText() async {
     if (selectedImage == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please capture or select an image first.')),
+        const SnackBar(
+          content: Text('Please capture or select an image first.'),
+        ),
       );
       return;
     }
@@ -57,7 +100,12 @@ class _CameraInvoiceScreenState extends State<CameraInvoiceScreen> {
     setState(() => extracting = true);
 
     try {
-      final text = await ocrService.extractTextFromImage(selectedImage!.path);
+      final text = await ocrService.extractTextFromImage(
+        selectedImage!.path,
+        language: ocrLanguage,
+        preferLocal: localBackendReady,
+      );
+
       if (!mounted) return;
       setState(() {
         ocrTextController.text = text;
@@ -78,7 +126,9 @@ class _CameraInvoiceScreenState extends State<CameraInvoiceScreen> {
     final ocrText = ocrTextController.text.trim();
     if (ocrText.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please paste or extract OCR text first.')),
+        const SnackBar(
+          content: Text('Please paste or extract OCR text first.'),
+        ),
       );
       return;
     }
@@ -96,7 +146,8 @@ class _CameraInvoiceScreenState extends State<CameraInvoiceScreen> {
     if (result.missingItems.isNotEmpty) {
       final manualLines = await showDialog<List<InvoiceLineModel>>(
         context: context,
-        builder: (_) => MissingItemsPriceDialog(missingItems: result.missingItems),
+        builder: (_) =>
+            MissingItemsPriceDialog(missingItems: result.missingItems),
       );
 
       if (manualLines != null && manualLines.isNotEmpty) {
@@ -162,11 +213,41 @@ class _CameraInvoiceScreenState extends State<CameraInvoiceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final backendColor = localBackendReady ? Colors.green : Colors.orange;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Camera Invoice')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          Card(
+            color: backendColor.withValues(alpha: 0.08),
+            child: ListTile(
+              leading: checkingBackend
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(
+                      localBackendReady
+                          ? Icons.cloud_done
+                          : Icons.phone_android,
+                      color: backendColor,
+                    ),
+              title: Text(
+                localBackendReady
+                    ? 'Local AI OCR mode'
+                    : 'Device OCR fallback mode',
+              ),
+              subtitle: Text(backendMessage),
+              trailing: IconButton(
+                onPressed: _checkBackend,
+                icon: const Icon(Icons.refresh),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
           TextField(
             controller: customerController,
             decoration: const InputDecoration(
@@ -187,6 +268,27 @@ class _CameraInvoiceScreenState extends State<CameraInvoiceScreen> {
             onChanged: (value) {
               setState(() {
                 invoiceType = value ?? invoiceType;
+              });
+            },
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: ocrLanguage,
+            decoration: const InputDecoration(
+              labelText: 'OCR Language',
+              border: OutlineInputBorder(),
+            ),
+            items: ocrLanguageOptions.entries
+                .map(
+                  (entry) => DropdownMenuItem<String>(
+                    value: entry.key,
+                    child: Text(entry.value),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              setState(() {
+                ocrLanguage = value ?? ocrLanguage;
               });
             },
           ),
@@ -227,7 +329,13 @@ class _CameraInvoiceScreenState extends State<CameraInvoiceScreen> {
           FilledButton.icon(
             onPressed: extracting ? null : _extractText,
             icon: const Icon(Icons.text_snippet),
-            label: Text(extracting ? 'Extracting...' : 'Extract OCR Text'),
+            label: Text(
+              extracting
+                  ? 'Extracting...'
+                  : localBackendReady
+                  ? 'Extract with Local AI'
+                  : 'Extract with Device OCR',
+            ),
           ),
           const SizedBox(height: 12),
           TextField(

@@ -143,18 +143,23 @@ class InvoiceRepository {
       id: row['id'] as int,
       invoiceNo: (row['invoice_no'] ?? '') as String,
       invoiceDate: DateTime.parse(
-          (row['invoice_date'] ?? DateTime.now().toIso8601String()) as String),
+        (row['invoice_date'] ?? DateTime.now().toIso8601String()) as String,
+      ),
       invoiceType: ((row['invoice_type'] ?? 'Cash') as String),
       customerName: ((row['customer_name'] ?? 'Cash') as String),
       sourceMode: ((row['source_mode'] ?? 'manual') as String),
       total: ((row['total'] as num?) ?? 0).toDouble(),
       notes: ((row['notes'] ?? '') as String),
       rawInputText: ((row['raw_input_text'] ?? '') as String),
-      createdAt: DateTime.tryParse(
-          (row['created_at'] ?? DateTime.now().toIso8601String()) as String) ??
+      createdAt:
+          DateTime.tryParse(
+            (row['created_at'] ?? DateTime.now().toIso8601String()) as String,
+          ) ??
           DateTime.now(),
-      updatedAt: DateTime.tryParse(
-          (row['updated_at'] ?? DateTime.now().toIso8601String()) as String) ??
+      updatedAt:
+          DateTime.tryParse(
+            (row['updated_at'] ?? DateTime.now().toIso8601String()) as String,
+          ) ??
           DateTime.now(),
     );
   }

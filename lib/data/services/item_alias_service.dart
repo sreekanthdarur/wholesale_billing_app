@@ -44,10 +44,7 @@ class ItemAliasService {
 
     // 2. DB items
     for (final item in dbItems) {
-      final allAliases = <String>[
-        item.name,
-        ...item.aliases,
-      ];
+      final allAliases = <String>[item.name, ...item.aliases];
 
       for (final alias in allAliases) {
         final aliasNormalized = _normalize(alias);

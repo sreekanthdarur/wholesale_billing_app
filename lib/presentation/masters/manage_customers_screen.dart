@@ -74,9 +74,9 @@ class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
                   const SizedBox(height: 12),
                   FilledButton(
                     onPressed: _save,
-                    child: Text(editingId == null
-                        ? 'Save Customer'
-                        : 'Update Customer'),
+                    child: Text(
+                      editingId == null ? 'Save Customer' : 'Update Customer',
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Expanded(
@@ -99,8 +99,10 @@ class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
                                 ),
                                 IconButton(
                                   onPressed: () => _delete(customer),
-                                  icon: const Icon(Icons.delete,
-                                      color: Colors.red),
+                                  icon: const Icon(
+                                    Icons.delete,
+                                    color: Colors.red,
+                                  ),
                                 ),
                               ],
                             ),

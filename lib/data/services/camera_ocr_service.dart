@@ -1,27 +1,46 @@
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
+import '../../core/constants/local_ai_config.dart';
 import '../../domain/models/draft_invoice.dart';
 import '../../domain/models/invoice_line.dart';
 import '../../domain/models/missing_item_model.dart';
 import '../repositories/item_repository.dart';
 import 'invoice_line_merge_service.dart';
 import 'item_alias_service.dart';
+import 'local_ai_bridge_service.dart';
 
 class OcrParseResult {
   final DraftInvoiceModel draft;
   final List<MissingItemModel> missingItems;
 
-  const OcrParseResult({
-    required this.draft,
-    required this.missingItems,
-  });
+  const OcrParseResult({required this.draft, required this.missingItems});
 }
 
 class CameraOcrService {
   final TextRecognizer _recognizer = TextRecognizer();
   final InvoiceLineMergeService _mergeService = invoiceLineMergeService;
+  final LocalAiBridgeService _localAiBridgeService = LocalAiBridgeService();
 
-  Future<String> extractTextFromImage(String imagePath) async {
+  Future<LocalAiHealthResult> healthCheck() {
+    return _localAiBridgeService.healthCheck();
+  }
+
+  Future<String> extractTextFromImage(
+    String imagePath, {
+    String language = 'en',
+    bool preferLocal = true,
+  }) async {
+    if (preferLocal && LocalAiConfig.enabled) {
+      final localResult = await _localAiBridgeService.extractTextFromImage(
+        imagePath: imagePath,
+        language: language,
+      );
+
+      if (localResult != null && localResult.text.trim().isNotEmpty) {
+        return localResult.text.trim();
+      }
+    }
+
     final inputImage = InputImage.fromFilePath(imagePath);
     final recognized = await _recognizer.processImage(inputImage);
     return recognized.text.trim();
@@ -34,11 +53,14 @@ class CameraOcrService {
   }) async {
     final cleanedLines = _stitchBrokenLines(_cleanLines(ocrText));
     final dbItems = await itemRepository.getAll();
-
     final parsedLines = <InvoiceLineModel>[];
     final missingItems = <MissingItemModel>[];
 
     for (final line in cleanedLines) {
+      if (_skipLine(line)) {
+        continue;
+      }
+
       final alias = itemAliasService.match(line, dbItems: dbItems);
       final unit = _detectUnit(line, alias.unit ?? 'kg');
       final qty = _detectQuantity(line);
@@ -148,9 +170,12 @@ class CameraOcrService {
       final current = lines[i];
 
       if (i < lines.length - 1) {
-        final combined =
-            '$current ${lines[i + 1]}'.replaceAll(RegExp(r'\s+'), ' ').trim();
-        if (_looksLikeSplitItem(current, lines[i + 1])) {
+        final next = lines[i + 1];
+        final combined = '$current $next'
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
+
+        if (_looksLikeSplitItem(current, next)) {
           result.add(combined);
           i += 2;
           continue;
@@ -172,7 +197,28 @@ class CameraOcrService {
         RegExp(r'^[a-zA-Z]+$').hasMatch(second)) {
       return true;
     }
+
+    if (!RegExp(r'\d').hasMatch(first) && RegExp(r'\d').hasMatch(second)) {
+      return true;
+    }
+
     return false;
+  }
+
+  bool _skipLine(String text) {
+    final t = text.toLowerCase();
+    return t.contains('invoice no') ||
+        t.contains('bill no') ||
+        t.contains('subtotal') ||
+        t.contains('sub total') ||
+        t.contains('grand total') ||
+        t == 'total' ||
+        t.startsWith('total ') ||
+        t.contains('gst') ||
+        t.contains('cgst') ||
+        t.contains('sgst') ||
+        t.contains('phone') ||
+        t.contains('mobile');
   }
 
   bool _hasMeaningfulNumbers(String text) {
@@ -181,19 +227,29 @@ class CameraOcrService {
 
   String _detectUnit(String text, String fallback) {
     final t = text.toLowerCase();
+
     if (RegExp(r'\b(ltr|litre|liter|liters|litres)\b').hasMatch(t)) {
       return 'ltr';
     }
     if (RegExp(r'\b(kg|kgs|kilogram|kilograms)\b').hasMatch(t)) {
       return 'kg';
     }
-    if (RegExp(r'\b(g|gm|gms|gram|grams)\b').hasMatch(t)) return 'g';
-    if (RegExp(r'\b(pc|pcs|piece|pieces)\b').hasMatch(t)) return 'pcs';
+    if (RegExp(r'\b(g|gm|gms|gram|grams)\b').hasMatch(t)) {
+      return 'g';
+    }
+    if (RegExp(r'\b(pc|pcs|piece|pieces)\b').hasMatch(t)) {
+      return 'pcs';
+    }
+
     return fallback;
   }
 
   double _detectQuantity(String text) {
     final t = text.toLowerCase();
+
+    if (RegExp(r'\bhalf\b').hasMatch(t)) {
+      return 0.5;
+    }
 
     final qtyWithUnit = RegExp(
       r'(\d+(?:\.\d+)?)\s*(kg|kgs|kilogram|kilograms|ltr|litre|liter|liters|litres|g|gm|gms|gram|grams|pc|pcs|piece|pieces)\b',
@@ -213,7 +269,6 @@ class CameraOcrService {
 
   double? _detectRate(String text, double qty) {
     final t = text.toLowerCase();
-
     final numbers = RegExp(r'(\d+(?:\.\d+)?)')
         .allMatches(t)
         .map((m) => double.tryParse(m.group(1) ?? ''))
@@ -226,7 +281,9 @@ class CameraOcrService {
     if (candidates.isEmpty) return null;
 
     final bigCandidates = candidates.where((n) => n > 20).toList();
-    if (bigCandidates.isNotEmpty) return bigCandidates.last;
+    if (bigCandidates.isNotEmpty) {
+      return bigCandidates.last;
+    }
 
     return candidates.last;
   }
@@ -255,14 +312,17 @@ class CameraOcrService {
 
   List<MissingItemModel> _dedupeMissing(List<MissingItemModel> items) {
     final map = <String, MissingItemModel>{};
+
     for (final item in items) {
       final key = item.itemName.trim().toLowerCase();
       map[key] = item;
     }
+
     return map.values.toList();
   }
 
   Future<void> dispose() async {
     await _recognizer.close();
+    _localAiBridgeService.dispose();
   }
 }

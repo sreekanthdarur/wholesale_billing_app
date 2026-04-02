@@ -11,36 +11,40 @@ class ExportService {
       final header = invoice.header;
 
       if (invoice.lines.isEmpty) {
-        buffer.writeln([
-          _csv(header.invoiceNo),
-          _csv(header.invoiceDate.toIso8601String().split('T').first),
-          _csv(header.invoiceType),
-          _csv(header.customerName),
-          _csv(header.sourceMode),
-          '',
-          '',
-          '',
-          '',
-          '',
-          _csv(header.notes),
-        ].join(','));
+        buffer.writeln(
+          [
+            _csv(header.invoiceNo),
+            _csv(header.invoiceDate.toIso8601String().split('T').first),
+            _csv(header.invoiceType),
+            _csv(header.customerName),
+            _csv(header.sourceMode),
+            '',
+            '',
+            '',
+            '',
+            '',
+            _csv(header.notes),
+          ].join(','),
+        );
         continue;
       }
 
       for (final line in invoice.lines) {
-        buffer.writeln([
-          _csv(header.invoiceNo),
-          _csv(header.invoiceDate.toIso8601String().split('T').first),
-          _csv(header.invoiceType),
-          _csv(header.customerName),
-          _csv(header.sourceMode),
-          _csv(line.itemName),
-          line.qty.toString(),
-          _csv(line.unit),
-          line.rate.toStringAsFixed(2),
-          line.amount.toStringAsFixed(2),
-          _csv(header.notes),
-        ].join(','));
+        buffer.writeln(
+          [
+            _csv(header.invoiceNo),
+            _csv(header.invoiceDate.toIso8601String().split('T').first),
+            _csv(header.invoiceType),
+            _csv(header.customerName),
+            _csv(header.sourceMode),
+            _csv(line.itemName),
+            line.qty.toString(),
+            _csv(line.unit),
+            line.rate.toStringAsFixed(2),
+            line.amount.toStringAsFixed(2),
+            _csv(header.notes),
+          ].join(','),
+        );
       }
     }
 

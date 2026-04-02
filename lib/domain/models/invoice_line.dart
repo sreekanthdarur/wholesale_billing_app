@@ -48,16 +48,16 @@ class InvoiceLineModel {
   }
 
   Map<String, dynamic> toMap(int invoiceId) => {
-        'invoice_id': invoiceId,
-        'item_name': itemName,
-        'qty': qty,
-        'unit': unit,
-        'rate': rate,
-        'amount': amount,
-        'is_custom_rate': isCustomRate ? 1 : 0,
-        'needs_review': needsReview ? 1 : 0,
-        'source_text': sourceText,
-      };
+    'invoice_id': invoiceId,
+    'item_name': itemName,
+    'qty': qty,
+    'unit': unit,
+    'rate': rate,
+    'amount': amount,
+    'is_custom_rate': isCustomRate ? 1 : 0,
+    'needs_review': needsReview ? 1 : 0,
+    'source_text': sourceText,
+  };
 
   factory InvoiceLineModel.fromMap(Map<String, dynamic> map) {
     return InvoiceLineModel(

@@ -1,0 +1,3 @@
+Add this under dependencies in pubspec.yaml:
+
+  record: ^6.2.0

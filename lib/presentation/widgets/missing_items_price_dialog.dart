@@ -6,13 +6,11 @@ import '../../domain/models/missing_item_model.dart';
 class MissingItemsPriceDialog extends StatefulWidget {
   final List<MissingItemModel> missingItems;
 
-  const MissingItemsPriceDialog({
-    super.key,
-    required this.missingItems,
-  });
+  const MissingItemsPriceDialog({super.key, required this.missingItems});
 
   @override
-  State<MissingItemsPriceDialog> createState() => _MissingItemsPriceDialogState();
+  State<MissingItemsPriceDialog> createState() =>
+      _MissingItemsPriceDialogState();
 }
 
 class _MissingItemsPriceDialogState extends State<MissingItemsPriceDialog> {
@@ -25,17 +23,15 @@ class _MissingItemsPriceDialogState extends State<MissingItemsPriceDialog> {
     _priceControllers = widget.missingItems
         .map(
           (e) => TextEditingController(
-        text: e.detectedRate != null ? e.detectedRate!.toStringAsFixed(2) : '',
-      ),
-    )
+            text: e.detectedRate != null
+                ? e.detectedRate!.toStringAsFixed(2)
+                : '',
+          ),
+        )
         .toList();
 
     _qtyControllers = widget.missingItems
-        .map(
-          (e) => TextEditingController(
-        text: e.qty.toStringAsFixed(0),
-      ),
-    )
+        .map((e) => TextEditingController(text: e.qty.toStringAsFixed(0)))
         .toList();
   }
 
@@ -101,7 +97,9 @@ class _MissingItemsPriceDialogState extends State<MissingItemsPriceDialog> {
                         Expanded(
                           child: TextField(
                             controller: _qtyControllers[index],
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
                             decoration: InputDecoration(
                               labelText: 'Qty (${item.unit})',
                               border: const OutlineInputBorder(),
@@ -112,7 +110,9 @@ class _MissingItemsPriceDialogState extends State<MissingItemsPriceDialog> {
                         Expanded(
                           child: TextField(
                             controller: _priceControllers[index],
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
                             decoration: const InputDecoration(
                               labelText: 'Price',
                               border: OutlineInputBorder(),
@@ -124,7 +124,10 @@ class _MissingItemsPriceDialogState extends State<MissingItemsPriceDialog> {
                     const SizedBox(height: 6),
                     Text(
                       'Source: ${item.sourceText}',
-                      style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+                      style: TextStyle(
+                        color: Colors.grey.shade700,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
@@ -138,10 +141,7 @@ class _MissingItemsPriceDialogState extends State<MissingItemsPriceDialog> {
           onPressed: () => Navigator.pop(context, <InvoiceLineModel>[]),
           child: const Text('Skip'),
         ),
-        FilledButton(
-          onPressed: _submit,
-          child: const Text('Add Items'),
-        ),
+        FilledButton(onPressed: _submit, child: const Text('Add Items')),
       ],
     );
   }

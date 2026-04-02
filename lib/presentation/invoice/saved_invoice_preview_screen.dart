@@ -9,10 +9,7 @@ import 'invoice_editor_screen.dart';
 class SavedInvoicePreviewScreen extends StatefulWidget {
   final int invoiceId;
 
-  const SavedInvoicePreviewScreen({
-    super.key,
-    required this.invoiceId,
-  });
+  const SavedInvoicePreviewScreen({super.key, required this.invoiceId});
 
   @override
   State<SavedInvoicePreviewScreen> createState() =>
@@ -80,9 +77,7 @@ class _SavedInvoicePreviewScreenState extends State<SavedInvoicePreviewScreen> {
   @override
   Widget build(BuildContext context) {
     if (loading || draft == null) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(

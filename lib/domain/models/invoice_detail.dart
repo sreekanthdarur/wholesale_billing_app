@@ -5,8 +5,5 @@ class InvoiceDetailModel {
   final InvoiceHeaderModel header;
   final List<InvoiceLineModel> lines;
 
-  const InvoiceDetailModel({
-    required this.header,
-    required this.lines,
-  });
+  const InvoiceDetailModel({required this.header, required this.lines});
 }

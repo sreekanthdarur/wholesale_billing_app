@@ -1,19 +1,9 @@
 class AppConstants {
   static const appName = 'Wholesale Billing App';
 
-  static const invoiceTypes = [
-    'Cash',
-    'Lakshmi Traders',
-    'UPI',
-    'Wholesale',
-  ];
+  static const invoiceTypes = ['Cash', 'Lakshmi Traders', 'UPI', 'Wholesale'];
 
-  static const units = [
-    'kg',
-    'g',
-    'ltr',
-    'pcs',
-  ];
+  static const units = ['kg', 'g', 'ltr', 'pcs'];
 
   static const defaultCustomers = [
     'Cash',
@@ -44,7 +34,7 @@ class AppConstants {
       'daal',
       'kandi pappu',
       'arhar dal',
-      'togari bele'
+      'togari bele',
     ],
     'Oil': ['oil', 'nune', 'tel', 'enne'],
     'Tamarind': ['tamarind', 'tamrin', 'imli', 'chintapandu', 'hunasehannu'],

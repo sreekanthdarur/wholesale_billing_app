@@ -3,9 +3,7 @@ import '../../domain/models/invoice_detail.dart';
 class PrintPreviewData {
   final String receiptText;
 
-  const PrintPreviewData({
-    required this.receiptText,
-  });
+  const PrintPreviewData({required this.receiptText});
 }
 
 class PrintService {
@@ -22,7 +20,8 @@ class PrintService {
     for (final line in detail.lines) {
       buffer.writeln(line.itemName);
       buffer.writeln(
-          '  ${line.qty} ${line.unit} x ₹${line.rate.toStringAsFixed(2)} = ₹${line.amount.toStringAsFixed(2)}');
+        '  ${line.qty} ${line.unit} x ₹${line.rate.toStringAsFixed(2)} = ₹${line.amount.toStringAsFixed(2)}',
+      );
     }
 
     buffer.writeln('------------------------------');

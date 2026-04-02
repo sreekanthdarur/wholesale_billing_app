@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../data/repositories/item_repository.dart';
 import '../../data/services/invoice_line_merge_service.dart';
+import '../../data/services/local_ai_bridge_service.dart';
 import '../../data/services/voice_parser_service.dart';
+import '../../domain/models/draft_invoice.dart';
 import '../../domain/models/invoice_line.dart';
 import '../../domain/models/item_model.dart';
 import '../invoice/invoice_preview_screen.dart';
 import '../widgets/missing_items_price_dialog.dart';
-import '../../domain/models/draft_invoice.dart';
 
 class VoiceInvoiceScreen extends StatefulWidget {
   const VoiceInvoiceScreen({super.key});
@@ -20,151 +21,149 @@ class VoiceInvoiceScreen extends StatefulWidget {
 }
 
 class _VoiceInvoiceScreenState extends State<VoiceInvoiceScreen> {
-  final stt.SpeechToText _speech = stt.SpeechToText();
   final VoiceParserService _parser = VoiceParserService();
+  final LocalAiBridgeService _localAiBridgeService = LocalAiBridgeService();
+  final AudioRecorder _recorder = AudioRecorder();
 
   final customerController = TextEditingController(text: 'Cash');
   final transcriptController = TextEditingController();
 
   String invoiceType = AppConstants.invoiceTypes.first;
-  bool speechReady = false;
-  bool isListening = false;
-  bool isInitializing = true;
-  bool keepListening = false;
-  String speechStatus = 'Preparing microphone...';
+  String speechLanguage = 'auto';
+  bool checkingBackend = true;
+  bool localBackendReady = false;
+  bool isRecording = false;
+  bool isTranscribing = false;
+  String status = 'Checking local speech server...';
+  String? lastRecordedPath;
+
+  final Map<String, String> speechLanguageOptions = const {
+    'auto': 'Auto detect',
+    'en': 'English',
+    'hi': 'Hindi',
+    'te': 'Telugu',
+    'kn': 'Kannada',
+  };
 
   @override
   void initState() {
     super.initState();
-    _initSpeech();
+    _checkBackend();
   }
 
-  Future<void> _initSpeech() async {
-    speechReady = await _speech.initialize(
-      onStatus: (status) async {
-        if (!mounted) return;
+  Future<void> _checkBackend() async {
+    setState(() {
+      checkingBackend = true;
+      status = 'Checking local speech server...';
+    });
 
-        setState(() {
-          speechStatus = status;
-          if (status == 'done' || status == 'notListening') {
-            isListening = false;
-          }
-        });
-
-        if (keepListening && (status == 'done' || status == 'notListening')) {
-          await Future.delayed(const Duration(milliseconds: 300));
-          if (mounted && keepListening) {
-            await _listenLoop();
-          }
-        }
-      },
-      onError: (error) async {
-        if (!mounted) return;
-
-        setState(() {
-          speechStatus = 'Error: ${error.errorMsg}';
-          isListening = false;
-        });
-
-        if (keepListening) {
-          await Future.delayed(const Duration(milliseconds: 500));
-          if (mounted && keepListening) {
-            await _listenLoop();
-          }
-        }
-      },
-    );
-
+    final result = await _localAiBridgeService.healthCheck();
     if (!mounted) return;
+
     setState(() {
-      isInitializing = false;
-      speechStatus = speechReady ? 'Ready' : 'Speech recognition unavailable';
+      localBackendReady = result.ok && result.sttReady;
+      checkingBackend = false;
+      status = result.ok
+          ? 'Local AI speech is ready.'
+          : 'Local AI speech unavailable. Please start the Python server.';
     });
   }
 
-  Future<bool> _ensureMicPermission() async {
-    final result = await Permission.microphone.request();
-    if (result.isGranted) return true;
-
-    if (!mounted) return false;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Microphone permission is required.')),
-    );
-    return false;
+  Future<void> _toggleRecording() async {
+    if (isRecording) {
+      await _stopRecordingAndTranscribe();
+    } else {
+      await _startRecording();
+    }
   }
 
-  Future<void> _listenLoop() async {
-    if (!speechReady || !keepListening) return;
-
-    setState(() {
-      isListening = true;
-      speechStatus = 'Listening...';
-    });
-
-    await _speech.listen(
-      onResult: (result) {
-        if (!mounted) return;
-
-        final appended = _parser.appendTranscript(
-          currentTranscript: transcriptController.text,
-          newChunk: result.recognizedWords,
-        );
-
-        setState(() {
-          transcriptController.text = appended;
-          transcriptController.selection = TextSelection.fromPosition(
-            TextPosition(offset: transcriptController.text.length),
-          );
-        });
-      },
-      listenFor: const Duration(seconds: 30),
-      pauseFor: const Duration(seconds: 3),
-      localeId: null,
-      listenOptions: stt.SpeechListenOptions(
-        partialResults: true,
-        listenMode: stt.ListenMode.dictation,
-      ),
-    );
-  }
-
-  Future<void> _startListening() async {
-    if (!await _ensureMicPermission()) return;
-
-    if (!speechReady) {
+  Future<void> _startRecording() async {
+    final hasPermission = await _recorder.hasPermission();
+    if (!hasPermission) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Speech recognition is not available on this device.')),
+        const SnackBar(content: Text('Microphone permission is required.')),
       );
       return;
     }
 
-    keepListening = true;
-    await _listenLoop();
-  }
+    final dir = await getTemporaryDirectory();
+    final filePath =
+        '${dir.path}/voice_invoice_${DateTime.now().millisecondsSinceEpoch}.wav';
 
-  Future<void> _stopListening() async {
-    keepListening = false;
-    await _speech.stop();
+    await _recorder.start(
+      const RecordConfig(
+        encoder: AudioEncoder.wav,
+        sampleRate: 16000,
+        numChannels: 1,
+      ),
+      path: filePath,
+    );
+
     if (!mounted) return;
     setState(() {
-      isListening = false;
-      speechStatus = 'Stopped';
+      isRecording = true;
+      status = 'Recording... tap again to stop and transcribe.';
+      lastRecordedPath = filePath;
     });
   }
 
-  Future<void> _toggleListening() async {
-    if (keepListening) {
-      await _stopListening();
-    } else {
-      await _startListening();
+  Future<void> _stopRecordingAndTranscribe() async {
+    final path = await _recorder.stop();
+    if (!mounted) return;
+
+    setState(() {
+      isRecording = false;
+      isTranscribing = true;
+      status = 'Uploading audio to local AI...';
+      lastRecordedPath = path;
+    });
+
+    if (path == null) {
+      setState(() {
+        isTranscribing = false;
+        status = 'Recording failed. Please try again.';
+      });
+      return;
     }
+
+    final result = await _localAiBridgeService.transcribeAudio(
+      audioPath: path,
+      language: speechLanguage,
+    );
+
+    if (!mounted) return;
+
+    if (result == null || result.text.trim().isEmpty) {
+      setState(() {
+        isTranscribing = false;
+        status = 'No speech detected. Try again closer to the phone mic.';
+      });
+      return;
+    }
+
+    final merged = _parser.appendTranscript(
+      currentTranscript: transcriptController.text,
+      newChunk: result.text,
+    );
+
+    setState(() {
+      transcriptController.text = merged;
+      transcriptController.selection = TextSelection.fromPosition(
+        TextPosition(offset: transcriptController.text.length),
+      );
+      isTranscribing = false;
+      status = 'Transcript captured from local AI.';
+    });
   }
 
   Future<void> _buildDraft() async {
     final transcript = transcriptController.text.trim();
     if (transcript.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please capture or type transcript text first.')),
+        const SnackBar(
+          content: Text('Please record or type transcript text first.'),
+        ),
       );
       return;
     }
@@ -182,7 +181,8 @@ class _VoiceInvoiceScreenState extends State<VoiceInvoiceScreen> {
     if (result.missingItems.isNotEmpty) {
       final manualLines = await showDialog<List<InvoiceLineModel>>(
         context: context,
-        builder: (_) => MissingItemsPriceDialog(missingItems: result.missingItems),
+        builder: (_) =>
+            MissingItemsPriceDialog(missingItems: result.missingItems),
       );
 
       if (manualLines != null && manualLines.isNotEmpty) {
@@ -234,27 +234,56 @@ class _VoiceInvoiceScreenState extends State<VoiceInvoiceScreen> {
   void _clearTranscript() {
     setState(() {
       transcriptController.clear();
+      status = 'Transcript cleared.';
     });
   }
 
   @override
   void dispose() {
-    keepListening = false;
     customerController.dispose();
     transcriptController.dispose();
-    _speech.stop();
+    _recorder.dispose();
+    _localAiBridgeService.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final micIcon = keepListening ? Icons.stop : Icons.mic;
+    final modeColor = localBackendReady ? Colors.green : Colors.orange;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Voice Invoice')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          Card(
+            color: modeColor.withValues(alpha: 0.08),
+            child: ListTile(
+              leading: checkingBackend
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(
+                      localBackendReady
+                          ? Icons.mic_external_on
+                          : Icons.warning_amber,
+                      color: modeColor,
+                    ),
+              title: Text(
+                localBackendReady
+                    ? 'Local AI speech mode'
+                    : 'Local AI speech server not ready',
+              ),
+              subtitle: Text(status),
+              trailing: IconButton(
+                onPressed: _checkBackend,
+                icon: const Icon(Icons.refresh),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
           TextField(
             controller: customerController,
             decoration: const InputDecoration(
@@ -279,13 +308,47 @@ class _VoiceInvoiceScreenState extends State<VoiceInvoiceScreen> {
             },
           ),
           const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: isInitializing ? null : _toggleListening,
-            icon: Icon(micIcon),
-            label: Text(keepListening ? 'Stop Listening' : 'Start Listening'),
+          DropdownButtonFormField<String>(
+            initialValue: speechLanguage,
+            decoration: const InputDecoration(
+              labelText: 'Speech Language',
+              border: OutlineInputBorder(),
+            ),
+            items: speechLanguageOptions.entries
+                .map(
+                  (entry) => DropdownMenuItem<String>(
+                    value: entry.key,
+                    child: Text(entry.value),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              setState(() {
+                speechLanguage = value ?? speechLanguage;
+              });
+            },
           ),
-          const SizedBox(height: 8),
-          Text('Speech Status: $speechStatus'),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: localBackendReady && !isTranscribing
+                ? _toggleRecording
+                : null,
+            icon: Icon(isRecording ? Icons.stop : Icons.mic),
+            label: Text(
+              isRecording
+                  ? 'Stop Recording & Transcribe'
+                  : isTranscribing
+                  ? 'Transcribing...'
+                  : 'Start Local AI Recording',
+            ),
+          ),
+          if (lastRecordedPath != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Last audio file: $lastRecordedPath',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
           const SizedBox(height: 12),
           TextField(
             controller: transcriptController,

@@ -20,11 +20,11 @@ class ItemModel {
       .toList();
 
   Map<String, dynamic> toMap() => {
-        'name': name,
-        'price': price,
-        'unit': unit,
-        'aliases_csv': aliasesCsv,
-      };
+    'name': name,
+    'price': price,
+    'unit': unit,
+    'aliases_csv': aliasesCsv,
+  };
 
   factory ItemModel.fromMap(Map<String, dynamic> map) {
     return ItemModel(

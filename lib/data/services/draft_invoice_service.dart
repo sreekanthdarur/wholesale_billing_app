@@ -10,9 +10,7 @@ class DraftInvoiceService {
       notes: '',
       rawInputText: '',
       invoiceDate: DateTime.now(),
-      lines: [
-        InvoiceLineModel(itemName: 'Rice', qty: 1, unit: 'kg', rate: 52),
-      ],
+      lines: [InvoiceLineModel(itemName: 'Rice', qty: 1, unit: 'kg', rate: 52)],
     );
   }
 }

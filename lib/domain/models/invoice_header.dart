@@ -26,20 +26,20 @@ class InvoiceHeaderModel {
   });
 
   Map<String, dynamic> toMap() => {
-        'invoice_no': invoiceNo,
-        'invoice_date': invoiceDate.toIso8601String(),
-        'invoice_type': invoiceType,
-        'customer_name': customerName,
-        'source_mode': sourceMode,
-        'notes': notes,
-        'raw_input_text': rawInputText,
-        'total': total,
-        'year': invoiceDate.year,
-        'month': invoiceDate.month,
-        'day': invoiceDate.day,
-        'created_at': createdAt.toIso8601String(),
-        'updated_at': updatedAt.toIso8601String(),
-      };
+    'invoice_no': invoiceNo,
+    'invoice_date': invoiceDate.toIso8601String(),
+    'invoice_type': invoiceType,
+    'customer_name': customerName,
+    'source_mode': sourceMode,
+    'notes': notes,
+    'raw_input_text': rawInputText,
+    'total': total,
+    'year': invoiceDate.year,
+    'month': invoiceDate.month,
+    'day': invoiceDate.day,
+    'created_at': createdAt.toIso8601String(),
+    'updated_at': updatedAt.toIso8601String(),
+  };
 
   factory InvoiceHeaderModel.fromMap(Map<String, dynamic> map) {
     return InvoiceHeaderModel(

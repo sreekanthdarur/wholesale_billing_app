@@ -1,0 +1,8 @@
+Add internet permission if missing:
+
+<uses-permission android:name="android.permission.INTERNET" />
+
+If you use http://LAN-IP:8099 during testing on Android 9+, opt in to cleartext HTTP for debug/local testing.
+The simplest temporary option is adding this on the <application> tag:
+
+android:usesCleartextTraffic="true"

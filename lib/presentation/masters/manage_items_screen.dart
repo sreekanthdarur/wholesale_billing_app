@@ -99,7 +99,8 @@ class _ManageItemsScreenState extends State<ManageItemsScreen> {
                         child: TextField(
                           controller: priceController,
                           keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true),
+                            decimal: true,
+                          ),
                           decoration: const InputDecoration(
                             labelText: 'Price',
                             border: OutlineInputBorder(),
@@ -129,8 +130,9 @@ class _ManageItemsScreenState extends State<ManageItemsScreen> {
                   const SizedBox(height: 12),
                   FilledButton(
                     onPressed: _save,
-                    child:
-                        Text(editingId == null ? 'Save Item' : 'Update Item'),
+                    child: Text(
+                      editingId == null ? 'Save Item' : 'Update Item',
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Expanded(
@@ -153,8 +155,8 @@ class _ManageItemsScreenState extends State<ManageItemsScreen> {
                                   onPressed: () => setState(() {
                                     editingId = item.id;
                                     nameController.text = item.name;
-                                    priceController.text =
-                                        item.price.toStringAsFixed(2);
+                                    priceController.text = item.price
+                                        .toStringAsFixed(2);
                                     unitController.text = item.unit;
                                     aliasController.text = item.aliasesCsv;
                                   }),
@@ -162,8 +164,10 @@ class _ManageItemsScreenState extends State<ManageItemsScreen> {
                                 ),
                                 IconButton(
                                   onPressed: () => _delete(item),
-                                  icon: const Icon(Icons.delete,
-                                      color: Colors.red),
+                                  icon: const Icon(
+                                    Icons.delete,
+                                    color: Colors.red,
+                                  ),
                                 ),
                               ],
                             ),

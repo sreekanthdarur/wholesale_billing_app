@@ -71,12 +71,16 @@ class _AutoAmountInvoiceScreenState extends State<AutoAmountInvoiceScreen> {
                     DropdownButtonFormField<String>(
                       initialValue: invoiceType,
                       decoration: const InputDecoration(
-                          labelText: 'Invoice Type',
-                          border: OutlineInputBorder()),
+                        labelText: 'Invoice Type',
+                        border: OutlineInputBorder(),
+                      ),
                       items: AppConstants.invoiceTypes
-                          .map<DropdownMenuItem<String>>((e) =>
-                              DropdownMenuItem<String>(
-                                  value: e, child: Text(e)))
+                          .map<DropdownMenuItem<String>>(
+                            (e) => DropdownMenuItem<String>(
+                              value: e,
+                              child: Text(e),
+                            ),
+                          )
                           .toList(),
                       onChanged: (value) =>
                           setState(() => invoiceType = value ?? invoiceType),
@@ -85,17 +89,20 @@ class _AutoAmountInvoiceScreenState extends State<AutoAmountInvoiceScreen> {
                     TextField(
                       controller: customerController,
                       decoration: const InputDecoration(
-                          labelText: 'Customer Name',
-                          border: OutlineInputBorder()),
+                        labelText: 'Customer Name',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: amountController,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       decoration: const InputDecoration(
-                          labelText: 'Target Invoice Amount',
-                          border: OutlineInputBorder()),
+                        labelText: 'Target Invoice Amount',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                     const SizedBox(height: 10),
                     Align(

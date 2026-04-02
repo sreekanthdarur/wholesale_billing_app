@@ -11,14 +11,45 @@ class VoiceParseResult {
   final DraftInvoiceModel draft;
   final List<MissingItemModel> missingItems;
 
-  const VoiceParseResult({
-    required this.draft,
-    required this.missingItems,
-  });
+  const VoiceParseResult({required this.draft, required this.missingItems});
 }
 
 class VoiceParserService {
   final InvoiceLineMergeService _mergeService = invoiceLineMergeService;
+
+  static const Map<String, String> _wordReplacements = {
+    'one': '1',
+    'two': '2',
+    'three': '3',
+    'four': '4',
+    'five': '5',
+    'six': '6',
+    'seven': '7',
+    'eight': '8',
+    'nine': '9',
+    'ten': '10',
+    'half': '0.5',
+    'quarter': '0.25',
+    'ek': '1',
+    'do': '2',
+    'teen': '3',
+    'char': '4',
+    'paanch': '5',
+    'aadha': '0.5',
+    'oka': '1',
+    'okati': '1',
+    'rendu': '2',
+    'moodu': '3',
+    'nalugu': '4',
+    'aidu': '5',
+    'ardha': '0.5',
+    'ondu': '1',
+    'eradu': '2',
+    'mooru': '3',
+    'naalku': '4',
+    'aidu_kn': '5',
+    'ardha_kn': '0.5',
+  };
 
   Future<VoiceParseResult> parseTranscript({
     required String transcript,
@@ -77,15 +108,15 @@ class VoiceParserService {
       invoiceDate: DateTime.now(),
       lines: merged.isEmpty
           ? [
-        InvoiceLineModel(
-          itemName: 'Review Item',
-          qty: 1,
-          unit: 'pcs',
-          rate: 0,
-          needsReview: true,
-          sourceText: 'No confident voice parse',
-        ),
-      ]
+              InvoiceLineModel(
+                itemName: 'Review Item',
+                qty: 1,
+                unit: 'pcs',
+                rate: 0,
+                needsReview: true,
+                sourceText: 'No confident voice parse',
+              ),
+            ]
           : merged,
     );
 
@@ -95,7 +126,10 @@ class VoiceParserService {
     );
   }
 
-  List<String> _splitIntoItemSegments(String transcript, List<ItemModel> dbItems) {
+  List<String> _splitIntoItemSegments(
+    String transcript,
+    List<ItemModel> dbItems,
+  ) {
     final aliasPositions = <_AliasHit>[];
     final normalized = transcript.toLowerCase();
 
@@ -111,9 +145,12 @@ class VoiceParserService {
     }
 
     for (final alias in allAliases) {
-      final idx = normalized.indexOf(alias);
-      if (idx >= 0) {
+      int startIndex = 0;
+      while (true) {
+        final idx = normalized.indexOf(alias, startIndex);
+        if (idx < 0) break;
         aliasPositions.add(_AliasHit(index: idx, alias: alias));
+        startIndex = idx + alias.length;
       }
     }
 
@@ -121,7 +158,7 @@ class VoiceParserService {
 
     if (aliasPositions.isEmpty) {
       return transcript
-          .split(RegExp(r',|;|\n| and '))
+          .split(RegExp(r',|;|\n| and | next | phir | tarvata | aamele '))
           .map((e) => e.trim())
           .where((e) => e.isNotEmpty)
           .toList();
@@ -145,10 +182,20 @@ class VoiceParserService {
 
   String _detectUnit(String text, String fallback) {
     final t = text.toLowerCase();
-    if (RegExp(r'\b(ltr|litre|liter|liters|litres)\b').hasMatch(t)) return 'ltr';
-    if (RegExp(r'\b(kg|kgs|kilogram|kilograms)\b').hasMatch(t)) return 'kg';
-    if (RegExp(r'\b(g|gm|gms|gram|grams)\b').hasMatch(t)) return 'g';
-    if (RegExp(r'\b(pc|pcs|piece|pieces)\b').hasMatch(t)) return 'pcs';
+
+    if (RegExp(r'\b(ltr|litre|liter|liters|litres|lit|literu)\b').hasMatch(t)) {
+      return 'ltr';
+    }
+    if (RegExp(r'\b(kg|kgs|kilogram|kilograms|kilo)\b').hasMatch(t)) {
+      return 'kg';
+    }
+    if (RegExp(r'\b(g|gm|gms|gram|grams)\b').hasMatch(t)) {
+      return 'g';
+    }
+    if (RegExp(r'\b(pc|pcs|piece|pieces|packet|packets)\b').hasMatch(t)) {
+      return 'pcs';
+    }
+
     return fallback;
   }
 
@@ -156,7 +203,7 @@ class VoiceParserService {
     final t = text.toLowerCase();
 
     final qtyWithUnit = RegExp(
-      r'(\d+(?:\.\d+)?)\s*(kg|kgs|kilogram|kilograms|ltr|litre|liter|liters|litres|g|gm|gms|gram|grams|pc|pcs|piece|pieces)\b',
+      r'(\d+(?:\.\d+)?)\s*(kg|kgs|kilogram|kilograms|kilo|ltr|litre|liter|liters|litres|g|gm|gms|gram|grams|pc|pcs|piece|pieces|packet|packets)\b',
     ).firstMatch(t);
 
     if (qtyWithUnit != null) {
@@ -166,6 +213,10 @@ class VoiceParserService {
     final leadingQty = RegExp(r'^\s*(\d+(?:\.\d+)?)\b').firstMatch(t);
     if (leadingQty != null) {
       return double.tryParse(leadingQty.group(1) ?? '') ?? 1.0;
+    }
+
+    if (t.contains('half') || t.contains('aadha') || t.contains('ardha')) {
+      return 0.5;
     }
 
     return 1.0;
@@ -208,11 +259,11 @@ class VoiceParserService {
     t = t
         .replaceAll(RegExp(r'\b\d+(?:\.\d+)?\b'), ' ')
         .replaceAll(
-      RegExp(
-        r'\b(kg|kgs|kilogram|kilograms|ltr|litre|liter|liters|litres|g|gm|gms|gram|grams|pc|pcs|piece|pieces|rate|price)\b',
-      ),
-      ' ',
-    )
+          RegExp(
+            r'\b(kg|kgs|kilogram|kilograms|kilo|ltr|litre|liter|liters|litres|g|gm|gms|gram|grams|pc|pcs|piece|pieces|packet|packets|rate|price)\b',
+          ),
+          ' ',
+        )
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
 
@@ -240,24 +291,26 @@ class VoiceParserService {
       text = text.replaceAll(RegExp('\\b$noise\\b'), ' ');
     }
 
+    _wordReplacements.forEach((key, replacement) {
+      final pattern = RegExp('\\b${RegExp.escape(key)}\\b');
+      text = text.replaceAll(pattern, replacement);
+    });
+
     text = text
-        .replaceAll(' one litre ', ' 1 ltr ')
-        .replaceAll(' one liter ', ' 1 ltr ')
-        .replaceAll(' one kg ', ' 1 kg ')
-        .replaceAll(' two kg ', ' 2 kg ')
-        .replaceAll(' three kg ', ' 3 kg ')
-        .replaceAll(' four kg ', ' 4 kg ')
-        .replaceAll(' five kg ', ' 5 kg ')
         .replaceAll(' litre', ' ltr')
         .replaceAll(' liter', ' ltr')
         .replaceAll(' litres', ' ltr')
         .replaceAll(' liters', ' ltr')
         .replaceAll(' kilograms', ' kg')
         .replaceAll(' kilogram', ' kg')
+        .replaceAll(' kilo', ' kg')
         .replaceAll(' kgs', ' kg')
         .replaceAll('&', ' and ')
         .replaceAll(' plus ', ' and ')
         .replaceAll(' then ', ' and ')
+        .replaceAll(' phir ', ' and ')
+        .replaceAll(' tarvata ', ' and ')
+        .replaceAll(' aamele ', ' and ')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
 
@@ -305,8 +358,5 @@ class _AliasHit {
   final int index;
   final String alias;
 
-  _AliasHit({
-    required this.index,
-    required this.alias,
-  });
+  _AliasHit({required this.index, required this.alias});
 }

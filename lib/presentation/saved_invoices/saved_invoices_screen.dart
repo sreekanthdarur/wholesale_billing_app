@@ -35,49 +35,47 @@ class _SavedInvoicesScreenState extends State<SavedInvoicesScreen> {
       appBar: AppBar(
         title: const Text('Saved Invoices'),
         actions: [
-          IconButton(
-            onPressed: _load,
-            icon: const Icon(Icons.refresh),
-          ),
+          IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
         ],
       ),
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : grouped.isEmpty
-              ? const Center(child: Text('No saved invoices available yet.'))
-              : ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: grouped.entries.map((entry) {
-                    final invoices = entry.value;
-                    return Card(
-                      child: ExpansionTile(
-                        title: Text(entry.key),
-                        subtitle: Text('${invoices.length} invoice(s)'),
-                        children: invoices.map((invoice) {
-                          return ListTile(
-                            title: Text(
-                                '${invoice.invoiceNo} • ${invoice.customerName}'),
-                            subtitle: Text(
-                              '${invoice.invoiceType} • ₹${invoice.total.toStringAsFixed(2)} • ${AppDateUtils.displayDate(invoice.invoiceDate)}',
+          ? const Center(child: Text('No saved invoices available yet.'))
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: grouped.entries.map((entry) {
+                final invoices = entry.value;
+                return Card(
+                  child: ExpansionTile(
+                    title: Text(entry.key),
+                    subtitle: Text('${invoices.length} invoice(s)'),
+                    children: invoices.map((invoice) {
+                      return ListTile(
+                        title: Text(
+                          '${invoice.invoiceNo} • ${invoice.customerName}',
+                        ),
+                        subtitle: Text(
+                          '${invoice.invoiceType} • ₹${invoice.total.toStringAsFixed(2)} • ${AppDateUtils.displayDate(invoice.invoiceDate)}',
+                        ),
+                        trailing: const Icon(Icons.visibility),
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => SavedInvoicePreviewScreen(
+                                invoiceId: invoice.id!,
+                              ),
                             ),
-                            trailing: const Icon(Icons.visibility),
-                            onTap: () async {
-                              await Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => SavedInvoicePreviewScreen(
-                                    invoiceId: invoice.id!,
-                                  ),
-                                ),
-                              );
-                              _load();
-                            },
                           );
-                        }).toList(),
-                      ),
-                    );
-                  }).toList(),
-                ),
+                          _load();
+                        },
+                      );
+                    }).toList(),
+                  ),
+                );
+              }).toList(),
+            ),
     );
   }
 }

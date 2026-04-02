@@ -53,9 +53,9 @@ class _ExportScreenState extends State<ExportScreen> {
         loading = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to generate export: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to generate export: $e')));
     }
   }
 
@@ -82,9 +82,7 @@ class _ExportScreenState extends State<ExportScreen> {
     final hasExportText = exportController.text.trim().isNotEmpty;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Export Center'),
-      ),
+      appBar: AppBar(title: const Text('Export Center')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

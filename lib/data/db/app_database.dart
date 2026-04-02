@@ -103,11 +103,9 @@ class AppDatabase {
 
   Future<void> _seedDefaults(Database db) async {
     for (final customer in AppConstants.defaultCustomers) {
-      await db.insert(
-        'customers',
-        {'name': customer},
-        conflictAlgorithm: ConflictAlgorithm.ignore,
-      );
+      await db.insert('customers', {
+        'name': customer,
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
     }
 
     for (final entry in AppConstants.itemDefaults.entries) {
@@ -115,16 +113,12 @@ class AppDatabase {
       final defaults = entry.value;
       final aliases = AppConstants.itemAliases[name]?.join(', ') ?? '';
 
-      await db.insert(
-        'items',
-        {
-          'name': name,
-          'price': defaults['rate'],
-          'unit': defaults['unit'],
-          'aliases_csv': aliases,
-        },
-        conflictAlgorithm: ConflictAlgorithm.ignore,
-      );
+      await db.insert('items', {
+        'name': name,
+        'price': defaults['rate'],
+        'unit': defaults['unit'],
+        'aliases_csv': aliases,
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
     }
   }
 }

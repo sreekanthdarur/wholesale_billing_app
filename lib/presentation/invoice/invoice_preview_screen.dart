@@ -23,9 +23,9 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
     if (!mounted) return;
     setState(() => saving = false);
     Navigator.popUntil(context, (route) => route.isFirst);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Invoice saved successfully')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Invoice saved successfully')));
   }
 
   void _edit() {

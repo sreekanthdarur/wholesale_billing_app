@@ -40,14 +40,15 @@ class AutoAmountService {
     required double targetAmount,
     String customerName = 'Cash',
   }) {
-    final roundedTarget =
-        targetAmount <= 0 ? 0.0 : double.parse(targetAmount.toStringAsFixed(2));
+    final roundedTarget = targetAmount <= 0
+        ? 0.0
+        : double.parse(targetAmount.toStringAsFixed(2));
 
     final selectedCount = roundedTarget >= 800
         ? 5
         : roundedTarget >= 450
-            ? 4
-            : 3;
+        ? 4
+        : 3;
 
     final selected = _catalog.take(selectedCount).toList();
     final lines = <InvoiceLineModel>[];
@@ -79,8 +80,10 @@ class AutoAmountService {
     }
 
     // Base quantity of 1 for each selected item when affordable.
-    final minBase =
-        selected.fold<double>(0, (sum, item) => sum + item.defaultRate);
+    final minBase = selected.fold<double>(
+      0,
+      (sum, item) => sum + item.defaultRate,
+    );
     if (remaining >= minBase) {
       for (final item in selected) {
         lines.add(
@@ -92,8 +95,9 @@ class AutoAmountService {
             sourceText: 'Auto-balanced base quantity',
           ),
         );
-        remaining =
-            double.parse((remaining - item.defaultRate).toStringAsFixed(2));
+        remaining = double.parse(
+          (remaining - item.defaultRate).toStringAsFixed(2),
+        );
       }
     }
 
@@ -117,8 +121,9 @@ class AutoAmountService {
             ),
           );
         }
-        remaining =
-            double.parse((remaining - item.defaultRate).toStringAsFixed(2));
+        remaining = double.parse(
+          (remaining - item.defaultRate).toStringAsFixed(2),
+        );
       }
       pointer++;
     }
@@ -137,15 +142,17 @@ class AutoAmountService {
           sourceText: 'Auto-generated fallback line',
         ),
       );
-      remaining =
-          double.parse((remaining - cheapest.defaultRate).toStringAsFixed(2));
+      remaining = double.parse(
+        (remaining - cheapest.defaultRate).toStringAsFixed(2),
+      );
     }
 
     // Final adjustment on first line only for exact balancing.
     if (lines.isNotEmpty && remaining.abs() > 0.009) {
       final current = lines.first;
-      final adjustedRate =
-          double.parse((current.rate + remaining).toStringAsFixed(2));
+      final adjustedRate = double.parse(
+        (current.rate + remaining).toStringAsFixed(2),
+      );
 
       if (adjustedRate > 0) {
         lines[0] = current.copyWith(
@@ -170,8 +177,9 @@ class AutoAmountService {
       lines: merged,
     );
 
-    final difference =
-        double.parse((roundedTarget - draft.total).toStringAsFixed(2));
+    final difference = double.parse(
+      (roundedTarget - draft.total).toStringAsFixed(2),
+    );
 
     return AutoAmountServiceResult(
       draft: draft,

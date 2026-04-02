@@ -35,18 +35,30 @@ class PreviewCard extends StatelessWidget {
             const Row(
               children: [
                 Expanded(
-                    flex: 3,
-                    child: Text('Item',
-                        style: TextStyle(fontWeight: FontWeight.bold))),
+                  flex: 3,
+                  child: Text(
+                    'Item',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
                 Expanded(
-                    child: Text('Qty',
-                        style: TextStyle(fontWeight: FontWeight.bold))),
+                  child: Text(
+                    'Qty',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
                 Expanded(
-                    child: Text('Rate',
-                        style: TextStyle(fontWeight: FontWeight.bold))),
+                  child: Text(
+                    'Rate',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
                 Expanded(
-                    child: Text('Amount',
-                        style: TextStyle(fontWeight: FontWeight.bold))),
+                  child: Text(
+                    'Amount',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 8),
@@ -68,8 +80,10 @@ class PreviewCard extends StatelessWidget {
               alignment: Alignment.centerRight,
               child: Text(
                 'Total: ₹${draft.total.toStringAsFixed(2)}',
-                style:
-                    const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
             if (draft.notes.trim().isNotEmpty) ...[

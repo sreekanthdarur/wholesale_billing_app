@@ -38,11 +38,7 @@ class ItemRepository {
 
   Future<void> delete(int id) async {
     final db = await AppDatabase.instance.database;
-    await db.delete(
-      'items',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    await db.delete('items', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<void> addIfMissing(ItemModel item) async {
