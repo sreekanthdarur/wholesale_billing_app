@@ -2,205 +2,264 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 
 import '../../domain/models/draft_invoice.dart';
 import '../../domain/models/invoice_line.dart';
-import 'voice_parser_service.dart';
+import '../../domain/models/missing_item_model.dart';
+import '../repositories/item_repository.dart';
+import 'invoice_line_merge_service.dart';
+import 'item_alias_service.dart';
 
-class CameraOcrResult {
+class OcrParseResult {
   final DraftInvoiceModel draft;
-  final List<String> warnings;
-  final String extractedText;
+  final List<MissingItemModel> missingItems;
 
-  const CameraOcrResult({
+  const OcrParseResult({
     required this.draft,
-    required this.warnings,
-    required this.extractedText,
+    required this.missingItems,
   });
 }
 
 class CameraOcrService {
   final TextRecognizer _recognizer = TextRecognizer();
-  final VoiceParserService _voiceParser = VoiceParserService();
+  final InvoiceLineMergeService _mergeService = invoiceLineMergeService;
 
   Future<String> extractTextFromImage(String imagePath) async {
     final inputImage = InputImage.fromFilePath(imagePath);
-    final recognizedText = await _recognizer.processImage(inputImage);
-    return recognizedText.text.trim();
+    final recognized = await _recognizer.processImage(inputImage);
+    return recognized.text.trim();
   }
 
-  CameraOcrResult parseOcrText({
+  Future<OcrParseResult> parseOcrText({
     required String ocrText,
     String invoiceType = 'Cash',
     String customerName = 'Cash',
-  }) {
-    final warnings = <String>[];
-    final cleanedLines = _cleanLines(ocrText);
+  }) async {
+    final cleanedLines = _stitchBrokenLines(_cleanLines(ocrText));
+    final dbItems = await itemRepository.getAll();
+
     final parsedLines = <InvoiceLineModel>[];
+    final missingItems = <MissingItemModel>[];
 
     for (final line in cleanedLines) {
-      final structured = _parseStructuredLine(line);
-      if (structured != null) {
-        parsedLines.add(structured);
-        continue;
-      }
+      final alias = itemAliasService.match(line, dbItems: dbItems);
+      final unit = _detectUnit(line, alias.unit ?? 'kg');
+      final qty = _detectQuantity(line);
+      final rate = _detectRate(line, qty);
 
-      final fallback = _voiceParser.parseTranscript(
-        transcript: line,
-        invoiceType: invoiceType,
-        customerName: customerName,
-      );
-
-      if (fallback.draft.lines.isNotEmpty) {
-        parsedLines.addAll(
-          fallback.draft.lines.map((e) => e.copyWith(sourceText: line)),
-        );
+      if (alias.canonicalName != null) {
+        if (_hasMeaningfulNumbers(line)) {
+          parsedLines.add(
+            InvoiceLineModel(
+              itemName: alias.canonicalName!,
+              qty: qty,
+              unit: unit,
+              rate: rate ?? alias.defaultRate ?? 0,
+              isCustomRate: rate != null,
+              needsReview: rate == null,
+              sourceText: line,
+            ),
+          );
+        } else {
+          missingItems.add(
+            MissingItemModel(
+              itemName: alias.canonicalName!,
+              unit: unit,
+              qty: qty,
+              detectedRate: rate,
+              sourceText: line,
+            ),
+          );
+        }
       } else {
-        warnings.add("Could not parse OCR line: '$line'");
+        final guessedName = _extractUnknownItemName(line);
+        if (guessedName.isNotEmpty) {
+          missingItems.add(
+            MissingItemModel(
+              itemName: guessedName,
+              unit: unit,
+              qty: qty,
+              detectedRate: rate,
+              sourceText: line,
+            ),
+          );
+        }
       }
     }
 
-    if (parsedLines.isEmpty) {
-      parsedLines.add(
-        InvoiceLineModel(
-          itemName: 'Review Item',
-          qty: 1,
-          unit: 'pcs',
-          rate: 0,
-          needsReview: true,
-          sourceText: ocrText,
-        ),
-      );
-      warnings.add('No valid OCR lines were extracted.');
-    }
+    final merged = _mergeService.merge(parsedLines);
 
-    final normalizedText = cleanedLines.join('\n');
-
-    return CameraOcrResult(
-      extractedText: normalizedText,
-      warnings: warnings,
-      draft: DraftInvoiceModel(
-        invoiceType: invoiceType,
-        customerName: customerName,
-        sourceMode: 'camera',
-        notes: warnings.isEmpty
-            ? 'Draft generated from OCR'
-            : 'Draft generated from OCR with review warnings',
-        rawInputText: normalizedText,
-        invoiceDate: DateTime.now(),
-        lines: parsedLines,
-      ),
-    );
-  }
-
-  List<String> _cleanLines(String raw) {
-    final lines = raw.split(RegExp(r'\r?\n'));
-    final cleaned = <String>[];
-
-    for (var line in lines) {
-      var value = line.trim();
-      if (value.isEmpty) continue;
-
-      if (RegExp(r'^\d{1,2}:\s*\d{1,2}$').hasMatch(value)) continue;
-
-      if (RegExp(r'^[A-Za-z0-9]{4,}\s+[A-Za-z0-9]{4,}$').hasMatch(value) &&
-          !value.toLowerCase().contains('kg')) {
-        continue;
-      }
-
-      value = value.replaceAll('—', '-');
-      value = value.replaceAll('–', '-');
-      value = value.replaceAll(
-        RegExp(r'(?<=\d)(kgs?)', caseSensitive: false),
-        ' kg',
-      );
-      value = value.replaceAll(RegExp(r'/-'), '');
-      value = value.replaceAll(RegExp(r'\s+'), ' ').trim();
-
-      if (value.isNotEmpty) cleaned.add(value);
-    }
-
-    return cleaned;
-  }
-
-  InvoiceLineModel? _parseStructuredLine(String line) {
-    final normalized = line.toLowerCase();
-
-    final match = RegExp(
-      r'^([a-zA-Z ]+?)\s*-?\s*(\d+(?:\.\d+)?)\s*(kg|kgs|ltr|litre|liter|pcs|piece|pieces)?\s*(\d+(?:\.\d+)?)?$',
-      caseSensitive: false,
-    ).firstMatch(normalized);
-
-    if (match == null) return null;
-
-    final rawName = (match.group(1) ?? '').trim();
-    final qty = double.tryParse(match.group(2) ?? '') ?? 1;
-    final rawUnit = (match.group(3) ?? 'kg').toLowerCase();
-    final price = double.tryParse(match.group(4) ?? '');
-
-    final name = _normalizeItemName(rawName);
-    final unit = _normalizeUnit(rawUnit);
-    final rate = price ?? _defaultRate(name);
-
-    return InvoiceLineModel(
-      itemName: name,
-      qty: qty,
-      unit: unit,
-      rate: rate,
-      isCustomRate: price != null,
-      needsReview: price == null,
-      sourceText: line,
-    );
-  }
-
-  String _normalizeItemName(String raw) {
-    final cleaned = raw.trim().toLowerCase();
-
-    if (cleaned.contains('rice')) return 'Rice';
-    if (cleaned.contains('daal') || cleaned.contains('dal')) return 'Toor Dal';
-    if (cleaned.contains('tamrin') ||
-        cleaned.contains('tamarin') ||
-        cleaned.contains('tamarind')) {
-      return 'Tamarind';
-    }
-    if (cleaned.contains('oil')) return 'Oil';
-    if (cleaned.contains('sugar')) return 'Sugar';
-
-    return raw.trim().isEmpty ? 'Review Item' : raw.trim();
-  }
-
-  String _normalizeUnit(String rawUnit) {
-    if (rawUnit.startsWith('kg')) return 'kg';
-    if (rawUnit.startsWith('ltr') || rawUnit.startsWith('lit')) return 'ltr';
-    if (rawUnit.startsWith('pc') || rawUnit.startsWith('piece')) return 'pcs';
-    return 'kg';
-  }
-
-  double _defaultRate(String itemName) {
-    switch (itemName) {
-      case 'Rice':
-        return 70;
-      case 'Toor Dal':
-        return 650;
-      case 'Tamarind':
-        return 28;
-      case 'Oil':
-        return 120;
-      case 'Sugar':
-        return 45;
-      default:
-        return 0;
-    }
-  }
-
-  Future<CameraOcrResult> processImage({
-    required String imagePath,
-    String invoiceType = 'Cash',
-    String customerName = 'Cash',
-  }) async {
-    final text = await extractTextFromImage(imagePath);
-    return parseOcrText(
-      ocrText: text,
+    final draft = DraftInvoiceModel(
       invoiceType: invoiceType,
       customerName: customerName,
+      sourceMode: 'camera',
+      notes: 'Draft generated from OCR',
+      rawInputText: cleanedLines.join('\n'),
+      invoiceDate: DateTime.now(),
+      lines: merged.isEmpty
+          ? [
+              InvoiceLineModel(
+                itemName: 'Review Item',
+                qty: 1,
+                unit: 'pcs',
+                rate: 0,
+                needsReview: true,
+                sourceText: 'No confident OCR parse',
+              ),
+            ]
+          : merged,
     );
+
+    return OcrParseResult(
+      draft: draft,
+      missingItems: _dedupeMissing(missingItems),
+    );
+  }
+
+  List<String> _cleanLines(String ocrText) {
+    return ocrText
+        .split(RegExp(r'\r?\n'))
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .where((e) => !RegExp(r'^\d{1,2}:\d{1,2}$').hasMatch(e))
+        .map(
+          (e) => e
+              .replaceAll(RegExp(r'/-'), '')
+              .replaceAll('Rs.', '')
+              .replaceAll('Rs', '')
+              .replaceAll('₹', '')
+              .replaceAll('per', ' ')
+              .replaceAll('KGS', ' kg ')
+              .replaceAll('Kgs', ' kg ')
+              .replaceAll('kgs', ' kg ')
+              .replaceAll('KG', ' kg ')
+              .replaceAll('kg', ' kg ')
+              .replaceAll('LTR', ' ltr ')
+              .replaceAll('Ltr', ' ltr ')
+              .replaceAll('ltr', ' ltr ')
+              .replaceAll(RegExp(r'\s+'), ' ')
+              .trim(),
+        )
+        .toList();
+  }
+
+  List<String> _stitchBrokenLines(List<String> lines) {
+    final result = <String>[];
+    int i = 0;
+
+    while (i < lines.length) {
+      final current = lines[i];
+
+      if (i < lines.length - 1) {
+        final combined =
+            '$current ${lines[i + 1]}'.replaceAll(RegExp(r'\s+'), ' ').trim();
+        if (_looksLikeSplitItem(current, lines[i + 1])) {
+          result.add(combined);
+          i += 2;
+          continue;
+        }
+      }
+
+      result.add(current);
+      i++;
+    }
+
+    return result;
+  }
+
+  bool _looksLikeSplitItem(String a, String b) {
+    final first = a.toLowerCase();
+    final second = b.toLowerCase();
+
+    if (RegExp(r'^[a-zA-Z]+$').hasMatch(first) &&
+        RegExp(r'^[a-zA-Z]+$').hasMatch(second)) {
+      return true;
+    }
+    return false;
+  }
+
+  bool _hasMeaningfulNumbers(String text) {
+    return RegExp(r'\d').hasMatch(text);
+  }
+
+  String _detectUnit(String text, String fallback) {
+    final t = text.toLowerCase();
+    if (RegExp(r'\b(ltr|litre|liter|liters|litres)\b').hasMatch(t)) {
+      return 'ltr';
+    }
+    if (RegExp(r'\b(kg|kgs|kilogram|kilograms)\b').hasMatch(t)) {
+      return 'kg';
+    }
+    if (RegExp(r'\b(g|gm|gms|gram|grams)\b').hasMatch(t)) return 'g';
+    if (RegExp(r'\b(pc|pcs|piece|pieces)\b').hasMatch(t)) return 'pcs';
+    return fallback;
+  }
+
+  double _detectQuantity(String text) {
+    final t = text.toLowerCase();
+
+    final qtyWithUnit = RegExp(
+      r'(\d+(?:\.\d+)?)\s*(kg|kgs|kilogram|kilograms|ltr|litre|liter|liters|litres|g|gm|gms|gram|grams|pc|pcs|piece|pieces)\b',
+    ).firstMatch(t);
+
+    if (qtyWithUnit != null) {
+      return double.tryParse(qtyWithUnit.group(1) ?? '') ?? 1.0;
+    }
+
+    final allNumbers = RegExp(r'(\d+(?:\.\d+)?)').allMatches(t).toList();
+    if (allNumbers.isNotEmpty) {
+      return double.tryParse(allNumbers.first.group(1) ?? '') ?? 1.0;
+    }
+
+    return 1.0;
+  }
+
+  double? _detectRate(String text, double qty) {
+    final t = text.toLowerCase();
+
+    final numbers = RegExp(r'(\d+(?:\.\d+)?)')
+        .allMatches(t)
+        .map((m) => double.tryParse(m.group(1) ?? ''))
+        .whereType<double>()
+        .toList();
+
+    if (numbers.length <= 1) return null;
+
+    final candidates = numbers.where((n) => (n - qty).abs() > 0.0001).toList();
+    if (candidates.isEmpty) return null;
+
+    final bigCandidates = candidates.where((n) => n > 20).toList();
+    if (bigCandidates.isNotEmpty) return bigCandidates.last;
+
+    return candidates.last;
+  }
+
+  String _extractUnknownItemName(String text) {
+    var t = text.toLowerCase();
+
+    t = t
+        .replaceAll(RegExp(r'\b\d+(?:\.\d+)?\b'), ' ')
+        .replaceAll(
+          RegExp(
+            r'\b(kg|kgs|kilogram|kilograms|ltr|litre|liter|liters|litres|g|gm|gms|gram|grams|pc|pcs|piece|pieces|rate|price)\b',
+          ),
+          ' ',
+        )
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    if (t.isEmpty) return '';
+
+    return t
+        .split(' ')
+        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
+        .join(' ');
+  }
+
+  List<MissingItemModel> _dedupeMissing(List<MissingItemModel> items) {
+    final map = <String, MissingItemModel>{};
+    for (final item in items) {
+      final key = item.itemName.trim().toLowerCase();
+      map[key] = item;
+    }
+    return map.values.toList();
   }
 
   Future<void> dispose() async {

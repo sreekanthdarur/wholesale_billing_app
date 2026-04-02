@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/utils/date_utils.dart';
 import '../../data/repositories/invoice_repository.dart';
 import '../../domain/models/invoice_header.dart';
-import '../invoice/invoice_editor_screen.dart';
+import '../invoice/saved_invoice_preview_screen.dart';
 
 class SavedInvoicesScreen extends StatefulWidget {
   const SavedInvoicesScreen({super.key});
@@ -25,9 +25,8 @@ class _SavedInvoicesScreenState extends State<SavedInvoicesScreen> {
   Future<void> _load() async {
     setState(() => loading = true);
     grouped = await invoiceRepository.getGroupedHeaders();
-    if (mounted) {
-      setState(() => loading = false);
-    }
+    if (!mounted) return;
+    setState(() => loading = false);
   }
 
   @override
@@ -36,7 +35,10 @@ class _SavedInvoicesScreenState extends State<SavedInvoicesScreen> {
       appBar: AppBar(
         title: const Text('Saved Invoices'),
         actions: [
-          IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
+          IconButton(
+            onPressed: _load,
+            icon: const Icon(Icons.refresh),
+          ),
         ],
       ),
       body: loading
@@ -56,14 +58,16 @@ class _SavedInvoicesScreenState extends State<SavedInvoicesScreen> {
                             title: Text(
                                 '${invoice.invoiceNo} • ${invoice.customerName}'),
                             subtitle: Text(
-                                '${invoice.invoiceType} • ₹${invoice.total.toStringAsFixed(2)} • ${AppDateUtils.displayDate(invoice.invoiceDate)}'),
-                            trailing: const Icon(Icons.edit),
+                              '${invoice.invoiceType ?? 'Cash'} • ₹${invoice.total.toStringAsFixed(2)} • ${AppDateUtils.displayDate(invoice.invoiceDate)}',
+                            ),
+                            trailing: const Icon(Icons.visibility),
                             onTap: () async {
                               await Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => InvoiceEditorScreen(
-                                      invoiceId: invoice.id!),
+                                  builder: (_) => SavedInvoicePreviewScreen(
+                                    invoiceId: invoice.id!,
+                                  ),
                                 ),
                               );
                               _load();

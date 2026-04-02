@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../data/repositories/invoice_repository.dart';
 import '../../data/services/export_service.dart';
+import '../../domain/models/invoice_detail.dart';
 
 class ExportScreen extends StatefulWidget {
   const ExportScreen({super.key});
@@ -11,101 +13,113 @@ class ExportScreen extends StatefulWidget {
 }
 
 class _ExportScreenState extends State<ExportScreen> {
-  final _service = ExportService();
   bool loading = false;
-  String status = 'Choose an export format.';
-  String? lastFilePath;
+  final TextEditingController exportController = TextEditingController();
+  final ExportService exportService = ExportService();
 
-  Future<void> _exportExcel({required bool tallyReady}) async {
+  Future<void> _buildExport() async {
     setState(() {
       loading = true;
-      status = 'Preparing export...';
-      lastFilePath = null;
+      exportController.clear();
     });
 
     try {
       final headers = await invoiceRepository.getAllHeaders();
-      final details = <dynamic>[];
+      final details = <InvoiceDetailModel>[];
+
       for (final header in headers) {
-        if (header.id == null) continue;
-        final detail = await invoiceRepository.getInvoiceDetail(header.id!);
-        if (detail != null) details.add(detail);
+        final detail = await invoiceRepository.getInvoiceDetail(header.id);
+        if (detail != null) {
+          details.add(detail);
+        }
       }
 
-      final export = tallyReady
-          ? await _service.buildTallyExcel(details.cast(),
-              fileName: 'tally_ready_import.xlsx')
-          : await _service.buildInvoiceExcel(details.cast(),
-              fileName: 'invoice_export.xlsx');
+      final csv = exportService.buildCsv(details);
+
+      if (!mounted) return;
 
       setState(() {
-        status = 'Export created successfully.';
-        lastFilePath = export.filePath;
+        exportController.text = csv;
+        loading = false;
       });
     } catch (e) {
+      if (!mounted) return;
+
       setState(() {
-        status = 'Export failed: $e';
+        loading = false;
       });
-    } finally {
-      if (mounted) setState(() => loading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to generate export: $e')),
+      );
     }
+  }
+
+  Future<void> _copyToClipboard() async {
+    final text = exportController.text.trim();
+    if (text.isEmpty) return;
+
+    await Clipboard.setData(ClipboardData(text: text));
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Export text copied to clipboard.')),
+    );
+  }
+
+  @override
+  void dispose() {
+    exportController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final hasExportText = exportController.text.trim().isNotEmpty;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Export Center')),
-      body: Padding(
+      appBar: AppBar(
+        title: const Text('Export Center'),
+      ),
+      body: ListView(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  'This phase generates Excel files locally. The second option creates a Tally-oriented workbook layout for import preparation.',
-                  style: TextStyle(color: Colors.grey.shade700),
-                ),
+        children: [
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'This export module currently prepares CSV-style invoice data. It can be extended later into Excel and Tally-ready file output.',
               ),
             ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed:
-                    loading ? null : () => _exportExcel(tallyReady: false),
-                icon: const Icon(Icons.file_download),
-                label: const Text('Export Standard Excel'),
-              ),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: loading ? null : _buildExport,
+            icon: const Icon(Icons.file_download),
+            label: Text(loading ? 'Preparing...' : 'Generate Export Data'),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: hasExportText ? _copyToClipboard : null,
+            icon: const Icon(Icons.copy),
+            label: const Text('Copy Export Text'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: exportController,
+            minLines: 12,
+            maxLines: 20,
+            readOnly: true,
+            decoration: const InputDecoration(
+              labelText: 'Export Output',
+              border: OutlineInputBorder(),
             ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed:
-                    loading ? null : () => _exportExcel(tallyReady: true),
-                icon: const Icon(Icons.table_chart),
-                label: const Text('Export Tally-ready Excel'),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Card(
-              child: ListTile(
-                title: const Text('Status'),
-                subtitle: Text(status),
-              ),
-            ),
-            if (lastFilePath != null) ...[
-              const SizedBox(height: 12),
-              Card(
-                child: ListTile(
-                  title: const Text('Last Export File'),
-                  subtitle: Text(lastFilePath!),
-                ),
-              ),
-            ],
-          ],
-        ),
+            onChanged: (_) {
+              setState(() {});
+            },
+          ),
+        ],
       ),
     );
   }

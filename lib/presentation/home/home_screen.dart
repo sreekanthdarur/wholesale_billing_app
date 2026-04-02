@@ -6,8 +6,9 @@ import '../camera/camera_invoice_screen.dart';
 import '../export/export_screen.dart';
 import '../invoice/draft_invoice_editor_screen.dart';
 import '../saved_invoices/saved_invoices_screen.dart';
+import '../masters/manage_customers_screen.dart';
+import '../masters/manage_items_screen.dart';
 import '../voice/voice_invoice_screen.dart';
-import '../widgets/placeholder_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -15,9 +16,10 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final draftService = DraftInvoiceService();
+
     final menu = [
-      _HomeMenuItem(
-          'Manual Invoice', 'Draft -> review -> save', Icons.receipt_long, () {
+      _HomeMenuItem('Create Manual Invoice', 'Draft -> preview -> save',
+          Icons.receipt_long, () {
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -31,42 +33,53 @@ class HomeScreen extends StatelessWidget {
       _HomeMenuItem(
           'Saved Invoices', 'Today / month / date grouping', Icons.folder_open,
           () {
-        Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const SavedInvoicesScreen()));
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const SavedInvoicesScreen()),
+        );
+      }),
+      _HomeMenuItem('Manage Customers', 'Customer master CRUD', Icons.people,
+          () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const ManageCustomersScreen()),
+        );
+      }),
+      _HomeMenuItem(
+          'Manage Items', 'Item master + aliases + prices', Icons.inventory_2,
+          () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const ManageItemsScreen()),
+        );
       }),
       _HomeMenuItem(
           'Voice Invoice', 'Microphone -> transcript -> draft', Icons.mic, () {
-        Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const VoiceInvoiceScreen()));
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const VoiceInvoiceScreen()),
+        );
       }),
       _HomeMenuItem(
           'Camera Invoice', 'Camera OCR -> draft -> confirm', Icons.camera_alt,
           () {
-        Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const CameraInvoiceScreen()));
-      }),
-      _HomeMenuItem('Auto Amount Invoice', 'Target value -> generated draft',
-          Icons.auto_awesome, () {
-        Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const AutoAmountInvoiceScreen()));
-      }),
-      _HomeMenuItem(
-          'Export Center', 'Excel / Tally-ready export', Icons.file_download,
-          () {
-        Navigator.push(
-            context, MaterialPageRoute(builder: (_) => const ExportScreen()));
-      }),
-      _HomeMenuItem('Printer Setup', 'Receipt preview foundation', Icons.print,
-          () {
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (_) => const PlaceholderScreen(
-              title: 'Printer Setup',
-              description:
-                  'Thermal printer device integration is the next phase. Print preview is already available from saved invoice edit screen.',
-            ),
-          ),
+          MaterialPageRoute(builder: (_) => const CameraInvoiceScreen()),
+        );
+      }),
+      _HomeMenuItem('Auto Amount Invoice', 'Target value -> balanced draft',
+          Icons.auto_awesome, () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const AutoAmountInvoiceScreen()),
+        );
+      }),
+      _HomeMenuItem(
+          'Export Center', 'CSV / Excel foundation', Icons.file_download, () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const ExportScreen()),
         );
       }),
     ];

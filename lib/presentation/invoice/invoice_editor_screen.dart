@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
 
-import '../../core/constants/app_constants.dart';
 import '../../core/utils/date_utils.dart';
 import '../../data/repositories/invoice_repository.dart';
+import '../../data/repositories/item_repository.dart';
+import '../../data/services/invoice_line_merge_service.dart';
 import '../../domain/models/draft_invoice.dart';
 import '../../domain/models/invoice_line.dart';
-import '../print/print_preview_screen.dart';
+import '../../domain/models/item_model.dart';
+import 'invoice_preview_update_screen.dart';
 
 class InvoiceEditorScreen extends StatefulWidget {
   final int invoiceId;
 
-  const InvoiceEditorScreen({super.key, required this.invoiceId});
+  const InvoiceEditorScreen({
+    super.key,
+    required this.invoiceId,
+  });
 
   @override
   State<InvoiceEditorScreen> createState() => _InvoiceEditorScreenState();
@@ -18,12 +23,14 @@ class InvoiceEditorScreen extends StatefulWidget {
 
 class _InvoiceEditorScreenState extends State<InvoiceEditorScreen> {
   bool loading = true;
-  bool saving = false;
   DraftInvoiceModel? draft;
+  String invoiceNo = '';
+
   late TextEditingController customerController;
   late TextEditingController notesController;
   late TextEditingController rawTextController;
-  String invoiceNo = '';
+
+  List<ItemModel> items = [];
 
   @override
   void initState() {
@@ -34,22 +41,17 @@ class _InvoiceEditorScreenState extends State<InvoiceEditorScreen> {
     _load();
   }
 
-  @override
-  void dispose() {
-    customerController.dispose();
-    notesController.dispose();
-    rawTextController.dispose();
-    super.dispose();
-  }
-
   Future<void> _load() async {
     final detail = await invoiceRepository.getInvoiceDetail(widget.invoiceId);
+    items = await itemRepository.getAll();
+
     if (detail == null) {
       if (!mounted) return;
       Navigator.pop(context);
       return;
     }
 
+    invoiceNo = detail.header.invoiceNo;
     draft = DraftInvoiceModel(
       invoiceType: detail.header.invoiceType,
       customerName: detail.header.customerName,
@@ -59,73 +61,69 @@ class _InvoiceEditorScreenState extends State<InvoiceEditorScreen> {
       invoiceDate: detail.header.invoiceDate,
       lines: detail.lines.map((e) => e.copyWith()).toList(),
     );
-    invoiceNo = detail.header.invoiceNo;
-    customerController.text = detail.header.customerName;
-    notesController.text = detail.header.notes;
-    rawTextController.text = detail.header.rawInputText;
 
-    if (mounted) {
-      setState(() => loading = false);
-    }
+    customerController.text = draft!.customerName;
+    notesController.text = draft!.notes;
+    rawTextController.text = draft!.rawInputText;
+
+    if (!mounted) return;
+    setState(() => loading = false);
   }
 
-  Future<void> _update() async {
+  void _previewUpdate() {
     if (draft == null) return;
+
     final validLines = draft!.lines
         .where((e) => e.itemName.trim().isNotEmpty && e.qty > 0)
         .toList();
+
     if (validLines.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Please keep at least one valid invoice line.')),
+          content: Text('Please keep at least one valid invoice line.'),
+        ),
       );
       return;
     }
 
-    setState(() => saving = true);
     draft!
       ..customerName = customerController.text.trim().isEmpty
           ? 'Cash'
           : customerController.text.trim()
       ..notes = notesController.text.trim()
       ..rawInputText = rawTextController.text.trim()
-      ..lines = validLines;
+      ..lines = invoiceLineMergeService.merge(validLines);
 
-    await invoiceRepository.updateInvoice(
-        invoiceId: widget.invoiceId, draft: draft!);
-    if (!mounted) return;
-    setState(() => saving = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Invoice updated successfully.')),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => InvoicePreviewUpdateScreen(
+          invoiceId: widget.invoiceId,
+          invoiceNo: invoiceNo,
+          draft: draft!,
+        ),
+      ),
     );
-    Navigator.pop(context);
+  }
+
+  @override
+  void dispose() {
+    customerController.dispose();
+    notesController.dispose();
+    rawTextController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     if (loading || draft == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Edit Saved Invoice'),
-        actions: [
-          IconButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      PrintPreviewScreen(invoiceId: widget.invoiceId),
-                ),
-              );
-            },
-            icon: const Icon(Icons.print),
-            tooltip: 'Print Preview',
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Edit Saved Invoice')),
       body: Column(
         children: [
           Expanded(
@@ -140,36 +138,29 @@ class _InvoiceEditorScreenState extends State<InvoiceEditorScreen> {
                         Row(
                           children: [
                             Expanded(
-                                child: _InfoBox(
-                                    label: 'Invoice No', value: invoiceNo)),
+                              child: _InfoBox(
+                                label: 'Invoice No',
+                                value: invoiceNo,
+                              ),
+                            ),
                             const SizedBox(width: 12),
                             Expanded(
-                                child: _InfoBox(
-                                    label: 'Date',
-                                    value: AppDateUtils.displayDate(
-                                        draft!.invoiceDate))),
+                              child: _InfoBox(
+                                label: 'Date',
+                                value: AppDateUtils.displayDate(
+                                  draft!.invoiceDate,
+                                ),
+                              ),
+                            ),
                           ],
-                        ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<String>(
-                          value: draft!.invoiceType,
-                          decoration: const InputDecoration(
-                              labelText: 'Invoice Type',
-                              border: OutlineInputBorder()),
-                          items: AppConstants.invoiceTypes
-                              .map<DropdownMenuItem<String>>((e) =>
-                                  DropdownMenuItem<String>(
-                                      value: e, child: Text(e)))
-                              .toList(),
-                          onChanged: (value) => setState(() =>
-                              draft!.invoiceType = value ?? draft!.invoiceType),
                         ),
                         const SizedBox(height: 12),
                         TextField(
                           controller: customerController,
                           decoration: const InputDecoration(
-                              labelText: 'Customer Name',
-                              border: OutlineInputBorder()),
+                            labelText: 'Customer Name',
+                            border: OutlineInputBorder(),
+                          ),
                         ),
                         const SizedBox(height: 12),
                         TextField(
@@ -177,7 +168,9 @@ class _InvoiceEditorScreenState extends State<InvoiceEditorScreen> {
                           minLines: 2,
                           maxLines: 3,
                           decoration: const InputDecoration(
-                              labelText: 'Notes', border: OutlineInputBorder()),
+                            labelText: 'Notes',
+                            border: OutlineInputBorder(),
+                          ),
                         ),
                         const SizedBox(height: 12),
                         TextField(
@@ -185,8 +178,9 @@ class _InvoiceEditorScreenState extends State<InvoiceEditorScreen> {
                           minLines: 3,
                           maxLines: 5,
                           decoration: const InputDecoration(
-                              labelText: 'Raw Input Text',
-                              border: OutlineInputBorder()),
+                            labelText: 'Raw Input Text',
+                            border: OutlineInputBorder(),
+                          ),
                         ),
                       ],
                     ),
@@ -196,6 +190,9 @@ class _InvoiceEditorScreenState extends State<InvoiceEditorScreen> {
                 ...draft!.lines.asMap().entries.map((entry) {
                   final index = entry.key;
                   final item = entry.value;
+                  final hasMatchingItem =
+                      items.any((e) => e.name == item.itemName);
+
                   return Card(
                     color: item.needsReview ? Colors.orange.shade50 : null,
                     child: Padding(
@@ -205,21 +202,63 @@ class _InvoiceEditorScreenState extends State<InvoiceEditorScreen> {
                           Row(
                             children: [
                               Expanded(
-                                  child: Text('Line ${index + 1}',
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold))),
+                                child: Text(
+                                  'Line ${index + 1}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
                               if (item.needsReview)
                                 const Chip(label: Text('Needs Review')),
                             ],
                           ),
                           const SizedBox(height: 8),
-                          TextFormField(
-                            initialValue: item.itemName,
+                          DropdownButtonFormField<String>(
+                            initialValue:
+                                hasMatchingItem ? item.itemName : null,
                             decoration: const InputDecoration(
-                                labelText: 'Item Name',
-                                border: OutlineInputBorder()),
-                            onChanged: (value) => item.itemName = value,
+                              labelText: 'Item',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: items
+                                .map(
+                                  (e) => DropdownMenuItem<String>(
+                                    value: e.name,
+                                    child: Text(
+                                      '${e.name} (₹${e.price.toStringAsFixed(2)}/${e.unit})',
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) {
+                              if (value == null) return;
+                              final selected = items.firstWhere(
+                                (e) => e.name == value,
+                              );
+                              setState(() {
+                                item.itemName = selected.name;
+                                item.unit = selected.unit;
+                                if (!item.isCustomRate) {
+                                  item.rate = selected.price;
+                                }
+                              });
+                            },
                           ),
+                          if (!hasMatchingItem &&
+                              item.itemName.trim().isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                'Current item: ${item.itemName}',
+                                style: TextStyle(
+                                  color: Colors.orange.shade800,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 12),
                           Row(
                             children: [
@@ -227,14 +266,19 @@ class _InvoiceEditorScreenState extends State<InvoiceEditorScreen> {
                                 child: TextFormField(
                                   initialValue: item.qty.toString(),
                                   decoration: InputDecoration(
-                                      labelText: 'Quantity (${item.unit})',
-                                      border: const OutlineInputBorder()),
+                                    labelText: 'Quantity (${item.unit})',
+                                    border: const OutlineInputBorder(),
+                                  ),
                                   keyboardType:
                                       const TextInputType.numberWithOptions(
-                                          decimal: true),
-                                  onChanged: (value) => setState(() =>
+                                    decimal: true,
+                                  ),
+                                  onChanged: (value) {
+                                    setState(() {
                                       item.qty =
-                                          double.tryParse(value) ?? item.qty),
+                                          double.tryParse(value) ?? item.qty;
+                                    });
+                                  },
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -242,68 +286,52 @@ class _InvoiceEditorScreenState extends State<InvoiceEditorScreen> {
                                 child: TextFormField(
                                   initialValue: item.rate.toStringAsFixed(2),
                                   decoration: const InputDecoration(
-                                      labelText: 'Rate',
-                                      border: OutlineInputBorder()),
+                                    labelText: 'Rate',
+                                    border: OutlineInputBorder(),
+                                  ),
                                   keyboardType:
                                       const TextInputType.numberWithOptions(
-                                          decimal: true),
-                                  onChanged: (value) => setState(() =>
+                                    decimal: true,
+                                  ),
+                                  onChanged: (value) {
+                                    setState(() {
                                       item.rate =
-                                          double.tryParse(value) ?? item.rate),
+                                          double.tryParse(value) ?? item.rate;
+                                      item.isCustomRate = true;
+                                    });
+                                  },
                                 ),
                               ),
                               IconButton(
                                 onPressed: draft!.lines.length == 1
                                     ? null
                                     : () => setState(
-                                        () => draft!.lines.removeAt(index)),
-                                icon:
-                                    const Icon(Icons.delete, color: Colors.red),
+                                          () => draft!.lines.removeAt(index),
+                                        ),
+                                icon: const Icon(
+                                  Icons.delete,
+                                  color: Colors.red,
+                                ),
                               ),
                             ],
-                          ),
-                          const SizedBox(height: 12),
-                          DropdownButtonFormField<String>(
-                            value: item.unit,
-                            decoration: const InputDecoration(
-                                labelText: 'Unit',
-                                border: OutlineInputBorder()),
-                            items: AppConstants.units
-                                .map<DropdownMenuItem<String>>((e) =>
-                                    DropdownMenuItem<String>(
-                                        value: e, child: Text(e)))
-                                .toList(),
-                            onChanged: (value) =>
-                                setState(() => item.unit = value ?? item.unit),
                           ),
                           const SizedBox(height: 8),
                           TextFormField(
                             initialValue: item.sourceText,
                             decoration: const InputDecoration(
-                                labelText: 'Source Text',
-                                border: OutlineInputBorder()),
+                              labelText: 'Source Text',
+                              border: OutlineInputBorder(),
+                            ),
                             onChanged: (value) => item.sourceText = value,
-                          ),
-                          SwitchListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('Custom Rate'),
-                            value: item.isCustomRate,
-                            onChanged: (value) =>
-                                setState(() => item.isCustomRate = value),
-                          ),
-                          SwitchListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('Needs Review'),
-                            value: item.needsReview,
-                            onChanged: (value) =>
-                                setState(() => item.needsReview = value),
                           ),
                           Align(
                             alignment: Alignment.centerRight,
-                            child: Text(
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text(
                                 'Amount: ₹${item.amount.toStringAsFixed(2)}',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w600)),
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -311,9 +339,17 @@ class _InvoiceEditorScreenState extends State<InvoiceEditorScreen> {
                   );
                 }),
                 OutlinedButton(
-                  onPressed: () => setState(() => draft!.lines.add(
+                  onPressed: () => setState(() {
+                    final firstItem = items.isNotEmpty ? items.first : null;
+                    draft!.lines.add(
                       InvoiceLineModel(
-                          itemName: '', qty: 1, unit: 'kg', rate: 0))),
+                        itemName: firstItem?.name ?? '',
+                        qty: 1,
+                        unit: firstItem?.unit ?? 'kg',
+                        rate: firstItem?.price ?? 0,
+                      ),
+                    );
+                  }),
                   child: const Text('Add Item Line'),
                 ),
               ],
@@ -330,19 +366,26 @@ class _InvoiceEditorScreenState extends State<InvoiceEditorScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Total Amount',
-                            style: TextStyle(fontWeight: FontWeight.bold)),
-                        Text('₹${draft!.total.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 22)),
+                        const Text(
+                          'Total Amount',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          '₹${draft!.total.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 22,
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 12),
                     SizedBox(
                       width: double.infinity,
-                      child: FilledButton(
-                        onPressed: saving ? null : _update,
-                        child: Text(saving ? 'Updating...' : 'Update Invoice'),
+                      child: FilledButton.icon(
+                        onPressed: _previewUpdate,
+                        icon: const Icon(Icons.preview),
+                        label: const Text('Preview Updated Invoice'),
                       ),
                     ),
                   ],
@@ -375,10 +418,18 @@ class _InfoBox extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Text(label,
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade700,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
+          Text(
+            value,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
         ],
       ),
     );

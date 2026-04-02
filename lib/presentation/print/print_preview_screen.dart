@@ -1,68 +1,39 @@
 import 'package:flutter/material.dart';
 
-import '../../data/repositories/invoice_repository.dart';
-import '../../data/services/print_service.dart';
+import '../../domain/models/draft_invoice.dart';
+import '../widgets/preview_card.dart';
 
-class PrintPreviewScreen extends StatefulWidget {
-  final int invoiceId;
+class PrintPreviewScreen extends StatelessWidget {
+  final String title;
+  final DraftInvoiceModel draft;
 
-  const PrintPreviewScreen({super.key, required this.invoiceId});
-
-  @override
-  State<PrintPreviewScreen> createState() => _PrintPreviewScreenState();
-}
-
-class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
-  final _printService = PrintService();
-  bool loading = true;
-  String receiptText = 'Loading receipt preview...';
-
-  @override
-  void initState() {
-    super.initState();
-    _loadPreview();
-  }
-
-  Future<void> _loadPreview() async {
-    final detail = await invoiceRepository.getInvoiceDetail(widget.invoiceId);
-    if (detail == null) {
-      setState(() {
-        loading = false;
-        receiptText = 'Invoice not found.';
-      });
-      return;
-    }
-    final preview = _printService.buildReceipt(detail);
-    setState(() {
-      loading = false;
-      receiptText = preview.receiptText;
-    });
-  }
+  const PrintPreviewScreen({
+    super.key,
+    required this.title,
+    required this.draft,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Print Preview')),
-      body: loading
-          ? const Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: const EdgeInsets.all(16),
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: SingleChildScrollView(
-                    child: SelectableText(
-                      receiptText,
-                      style: const TextStyle(
-                        fontFamily: 'monospace',
-                        fontSize: 14,
-                        height: 1.5,
-                      ),
-                    ),
-                  ),
-                ),
+      appBar: AppBar(
+        title: Text(title),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          PreviewCard(draft: draft),
+          const SizedBox(height: 12),
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'This is the print preview foundation. Thermal printer / Bluetooth / device-print integration can be added in the next phase.',
               ),
             ),
+          ),
+        ],
+      ),
     );
   }
 }

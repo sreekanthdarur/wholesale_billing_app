@@ -1,111 +1,107 @@
-import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-import 'package:excel/excel.dart';
-import 'package:path_provider/path_provider.dart';
-
+import '../../data/repositories/invoice_repository.dart';
 import '../../domain/models/invoice_detail.dart';
 
-class ExportFileData {
-  final String fileName;
-  final String filePath;
+class ExportScreen extends StatefulWidget {
+  const ExportScreen({super.key});
 
-  const ExportFileData({
-    required this.fileName,
-    required this.filePath,
-  });
+  @override
+  State<ExportScreen> createState() => _ExportScreenState();
 }
 
-class ExportService {
-  Future<ExportFileData> buildInvoiceExcel(List<InvoiceDetailModel> invoices,
-      {String fileName = 'invoice_export.xlsx'}) async {
-    final excel = Excel.createExcel();
-    final sheet = excel['Invoices'];
+class _ExportScreenState extends State<ExportScreen> {
+  bool loading = false;
+  final TextEditingController exportController = TextEditingController();
 
-    sheet.appendRow([
-      TextCellValue('Invoice No'),
-      TextCellValue('Invoice Date'),
-      TextCellValue('Invoice Type'),
-      TextCellValue('Customer'),
-      TextCellValue('Source Mode'),
-      TextCellValue('Item Name'),
-      TextCellValue('Qty'),
-      TextCellValue('Unit'),
-      TextCellValue('Rate'),
-      TextCellValue('Amount'),
-      TextCellValue('Total'),
-      TextCellValue('Notes'),
-    ]);
+  get exportService => null;
 
-    for (final invoice in invoices) {
-      for (final line in invoice.lines) {
-        sheet.appendRow([
-          TextCellValue(invoice.header.invoiceNo),
-          TextCellValue(invoice.header.invoiceDate.toIso8601String()),
-          TextCellValue(invoice.header.invoiceType),
-          TextCellValue(invoice.header.customerName),
-          TextCellValue(invoice.header.sourceMode),
-          TextCellValue(line.itemName),
-          DoubleCellValue(line.qty),
-          TextCellValue(line.unit),
-          DoubleCellValue(line.rate),
-          DoubleCellValue(line.amount),
-          DoubleCellValue(invoice.header.total),
-          TextCellValue(invoice.header.notes),
-        ]);
+  Future<void> _buildExport() async {
+    setState(() {
+      loading = true;
+      exportController.clear();
+    });
+
+    final headers = await invoiceRepository.getAllHeaders();
+    final details = <InvoiceDetailModel>[];
+
+    for (final header in headers) {
+      final detail = await invoiceRepository.getInvoiceDetail(header.id!);
+      if (detail != null) {
+        details.add(detail);
       }
     }
 
-    final bytes = excel.encode();
-    if (bytes == null) {
-      throw Exception('Failed to encode Excel file.');
-    }
-    final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/$fileName');
-    await file.writeAsBytes(bytes, flush: true);
-    return ExportFileData(fileName: fileName, filePath: file.path);
+    final csv = exportService.buildCsv(details);
+
+    if (!mounted) return;
+    setState(() {
+      exportController.text = csv;
+      loading = false;
+    });
   }
 
-  Future<ExportFileData> buildTallyExcel(List<InvoiceDetailModel> invoices,
-      {String fileName = 'tally_ready_import.xlsx'}) async {
-    final excel = Excel.createExcel();
-    final sheet = excel['TallyImport'];
+  Future<void> _copyToClipboard() async {
+    final text = exportController.text.trim();
+    if (text.isEmpty) return;
 
-    sheet.appendRow([
-      TextCellValue('VoucherType'),
-      TextCellValue('Date'),
-      TextCellValue('VoucherNumber'),
-      TextCellValue('PartyLedgerName'),
-      TextCellValue('ItemName'),
-      TextCellValue('BilledQty'),
-      TextCellValue('Rate'),
-      TextCellValue('Amount'),
-      TextCellValue('Narration'),
-    ]);
+    await Clipboard.setData(ClipboardData(text: text));
 
-    for (final invoice in invoices) {
-      for (final line in invoice.lines) {
-        sheet.appendRow([
-          TextCellValue(invoice.header.invoiceType),
-          TextCellValue(
-              invoice.header.invoiceDate.toIso8601String().split('T').first),
-          TextCellValue(invoice.header.invoiceNo),
-          TextCellValue(invoice.header.customerName),
-          TextCellValue(line.itemName),
-          TextCellValue('${line.qty} ${line.unit}'),
-          DoubleCellValue(line.rate),
-          DoubleCellValue(line.amount),
-          TextCellValue(invoice.header.notes),
-        ]);
-      }
-    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Export text copied to clipboard.')),
+    );
+  }
 
-    final bytes = excel.encode();
-    if (bytes == null) {
-      throw Exception('Failed to encode Tally Excel file.');
-    }
-    final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/$fileName');
-    await file.writeAsBytes(bytes, flush: true);
-    return ExportFileData(fileName: fileName, filePath: file.path);
+  @override
+  void dispose() {
+    exportController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Export Center'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'This export module currently prepares CSV-style invoice data. It can be extended later into Excel and Tally-ready file output.',
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: loading ? null : _buildExport,
+            icon: const Icon(Icons.file_download),
+            label: Text(loading ? 'Preparing...' : 'Generate Export Data'),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: exportController.text.trim().isEmpty ? null : _copyToClipboard,
+            icon: const Icon(Icons.copy),
+            label: const Text('Copy Export Text'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: exportController,
+            minLines: 12,
+            maxLines: 20,
+            readOnly: true,
+            decoration: const InputDecoration(
+              labelText: 'Export Output',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
