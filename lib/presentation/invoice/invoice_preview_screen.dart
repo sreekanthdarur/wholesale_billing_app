@@ -16,7 +16,7 @@ class InvoicePreviewScreen extends StatefulWidget {
 
 class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
   bool saving = false;
-
+  final InvoiceRepository invoiceRepository = InvoiceRepository();
   Future<void> _save() async {
     setState(() => saving = true);
     await invoiceRepository.createInvoiceFromDraft(widget.initialDraft);

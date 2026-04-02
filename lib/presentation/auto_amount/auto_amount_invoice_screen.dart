@@ -69,7 +69,7 @@ class _AutoAmountInvoiceScreenState extends State<AutoAmountInvoiceScreen> {
                 child: Column(
                   children: [
                     DropdownButtonFormField<String>(
-                      value: invoiceType,
+                      initialValue: invoiceType,
                       decoration: const InputDecoration(
                           labelText: 'Invoice Type',
                           border: OutlineInputBorder()),

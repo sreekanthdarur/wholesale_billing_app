@@ -79,20 +79,23 @@ class _InvoiceEditorScreenState extends State<InvoiceEditorScreen> {
 
     if (validLines.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please keep at least one valid invoice line.'),
-        ),
+        const SnackBar(content: Text('Please keep at least one valid invoice line.')),
       );
       return;
     }
 
-    draft!
-      ..customerName = customerController.text.trim().isEmpty
+    final updatedDraft = draft!.copyWith(
+      customerName: customerController.text.trim().isEmpty
           ? 'Cash'
-          : customerController.text.trim()
-      ..notes = notesController.text.trim()
-      ..rawInputText = rawTextController.text.trim()
-      ..lines = invoiceLineMergeService.merge(validLines);
+          : customerController.text.trim(),
+      notes: notesController.text.trim(),
+      rawInputText: rawTextController.text.trim(),
+      lines: invoiceLineMergeService.merge(validLines),
+    );
+
+    setState(() {
+      draft = updatedDraft;
+    });
 
     Navigator.push(
       context,
@@ -100,7 +103,7 @@ class _InvoiceEditorScreenState extends State<InvoiceEditorScreen> {
         builder: (_) => InvoicePreviewUpdateScreen(
           invoiceId: widget.invoiceId,
           invoiceNo: invoiceNo,
-          draft: draft!,
+          draft: updatedDraft,
         ),
       ),
     );
@@ -147,9 +150,7 @@ class _InvoiceEditorScreenState extends State<InvoiceEditorScreen> {
                             Expanded(
                               child: _InfoBox(
                                 label: 'Date',
-                                value: AppDateUtils.displayDate(
-                                  draft!.invoiceDate,
-                                ),
+                                value: AppDateUtils.displayDate(draft!.invoiceDate),
                               ),
                             ),
                           ],
@@ -190,8 +191,7 @@ class _InvoiceEditorScreenState extends State<InvoiceEditorScreen> {
                 ...draft!.lines.asMap().entries.map((entry) {
                   final index = entry.key;
                   final item = entry.value;
-                  final hasMatchingItem =
-                      items.any((e) => e.name == item.itemName);
+                  final hasMatchingItem = items.any((e) => e.name == item.itemName);
 
                   return Card(
                     color: item.needsReview ? Colors.orange.shade50 : null,
@@ -204,19 +204,15 @@ class _InvoiceEditorScreenState extends State<InvoiceEditorScreen> {
                               Expanded(
                                 child: Text(
                                   'Line ${index + 1}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
                                 ),
                               ),
-                              if (item.needsReview)
-                                const Chip(label: Text('Needs Review')),
+                              if (item.needsReview) const Chip(label: Text('Needs Review')),
                             ],
                           ),
                           const SizedBox(height: 8),
                           DropdownButtonFormField<String>(
-                            initialValue:
-                                hasMatchingItem ? item.itemName : null,
+                            initialValue: hasMatchingItem ? item.itemName : null,
                             decoration: const InputDecoration(
                               labelText: 'Item',
                               border: OutlineInputBorder(),
@@ -224,29 +220,28 @@ class _InvoiceEditorScreenState extends State<InvoiceEditorScreen> {
                             items: items
                                 .map(
                                   (e) => DropdownMenuItem<String>(
-                                    value: e.name,
-                                    child: Text(
-                                      '${e.name} (₹${e.price.toStringAsFixed(2)}/${e.unit})',
-                                    ),
-                                  ),
-                                )
+                                value: e.name,
+                                child: Text(
+                                  '${e.name} (₹${e.price.toStringAsFixed(2)}/${e.unit})',
+                                ),
+                              ),
+                            )
                                 .toList(),
                             onChanged: (value) {
                               if (value == null) return;
-                              final selected = items.firstWhere(
-                                (e) => e.name == value,
+                              final selected = items.firstWhere((e) => e.name == value);
+                              final updatedLines = [...draft!.lines];
+                              updatedLines[index] = item.copyWith(
+                                itemName: selected.name,
+                                unit: selected.unit,
+                                rate: item.isCustomRate ? item.rate : selected.price,
                               );
                               setState(() {
-                                item.itemName = selected.name;
-                                item.unit = selected.unit;
-                                if (!item.isCustomRate) {
-                                  item.rate = selected.price;
-                                }
+                                draft = draft!.copyWith(lines: updatedLines);
                               });
                             },
                           ),
-                          if (!hasMatchingItem &&
-                              item.itemName.trim().isNotEmpty) ...[
+                          if (!hasMatchingItem && item.itemName.trim().isNotEmpty) ...[
                             const SizedBox(height: 8),
                             Align(
                               alignment: Alignment.centerLeft,
@@ -269,14 +264,13 @@ class _InvoiceEditorScreenState extends State<InvoiceEditorScreen> {
                                     labelText: 'Quantity (${item.unit})',
                                     border: const OutlineInputBorder(),
                                   ),
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                    decimal: true,
-                                  ),
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                   onChanged: (value) {
+                                    final updatedLines = [...draft!.lines];
+                                    updatedLines[index] =
+                                        item.copyWith(qty: double.tryParse(value) ?? item.qty);
                                     setState(() {
-                                      item.qty =
-                                          double.tryParse(value) ?? item.qty;
+                                      draft = draft!.copyWith(lines: updatedLines);
                                     });
                                   },
                                 ),
@@ -289,15 +283,15 @@ class _InvoiceEditorScreenState extends State<InvoiceEditorScreen> {
                                     labelText: 'Rate',
                                     border: OutlineInputBorder(),
                                   ),
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                    decimal: true,
-                                  ),
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                   onChanged: (value) {
+                                    final updatedLines = [...draft!.lines];
+                                    updatedLines[index] = item.copyWith(
+                                      rate: double.tryParse(value) ?? item.rate,
+                                      isCustomRate: true,
+                                    );
                                     setState(() {
-                                      item.rate =
-                                          double.tryParse(value) ?? item.rate;
-                                      item.isCustomRate = true;
+                                      draft = draft!.copyWith(lines: updatedLines);
                                     });
                                   },
                                 ),
@@ -305,13 +299,13 @@ class _InvoiceEditorScreenState extends State<InvoiceEditorScreen> {
                               IconButton(
                                 onPressed: draft!.lines.length == 1
                                     ? null
-                                    : () => setState(
-                                          () => draft!.lines.removeAt(index),
-                                        ),
-                                icon: const Icon(
-                                  Icons.delete,
-                                  color: Colors.red,
-                                ),
+                                    : () {
+                                  final updatedLines = [...draft!.lines]..removeAt(index);
+                                  setState(() {
+                                    draft = draft!.copyWith(lines: updatedLines);
+                                  });
+                                },
+                                icon: const Icon(Icons.delete, color: Colors.red),
                               ),
                             ],
                           ),
@@ -322,15 +316,19 @@ class _InvoiceEditorScreenState extends State<InvoiceEditorScreen> {
                               labelText: 'Source Text',
                               border: OutlineInputBorder(),
                             ),
-                            onChanged: (value) => item.sourceText = value,
+                            onChanged: (value) {
+                              final updatedLines = [...draft!.lines];
+                              updatedLines[index] = item.copyWith(sourceText: value);
+                              setState(() {
+                                draft = draft!.copyWith(lines: updatedLines);
+                              });
+                            },
                           ),
                           Align(
                             alignment: Alignment.centerRight,
                             child: Padding(
                               padding: const EdgeInsets.only(top: 8),
-                              child: Text(
-                                'Amount: ₹${item.amount.toStringAsFixed(2)}',
-                              ),
+                              child: Text('Amount: ₹${item.amount.toStringAsFixed(2)}'),
                             ),
                           ),
                         ],
@@ -339,17 +337,20 @@ class _InvoiceEditorScreenState extends State<InvoiceEditorScreen> {
                   );
                 }),
                 OutlinedButton(
-                  onPressed: () => setState(() {
+                  onPressed: () {
                     final firstItem = items.isNotEmpty ? items.first : null;
-                    draft!.lines.add(
-                      InvoiceLineModel(
-                        itemName: firstItem?.name ?? '',
-                        qty: 1,
-                        unit: firstItem?.unit ?? 'kg',
-                        rate: firstItem?.price ?? 0,
-                      ),
-                    );
-                  }),
+                    final updatedLines = [...draft!.lines,
+                        InvoiceLineModel(
+                          itemName: firstItem?.name ?? '',
+                          qty: 1,
+                          unit: firstItem?.unit ?? 'kg',
+                          rate: firstItem?.price ?? 0,
+                        ),
+                      ];
+                    setState(() {
+                      draft = draft!.copyWith(lines: updatedLines);
+                    });
+                  },
                   child: const Text('Add Item Line'),
                 ),
               ],

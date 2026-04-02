@@ -16,6 +16,7 @@ class _ExportScreenState extends State<ExportScreen> {
   bool loading = false;
   final TextEditingController exportController = TextEditingController();
   final ExportService exportService = ExportService();
+  final InvoiceRepository invoiceRepository = InvoiceRepository();
 
   Future<void> _buildExport() async {
     setState(() {
@@ -28,7 +29,12 @@ class _ExportScreenState extends State<ExportScreen> {
       final details = <InvoiceDetailModel>[];
 
       for (final header in headers) {
-        final detail = await invoiceRepository.getInvoiceDetail(header.id);
+        final invoiceId = header.id;
+        if (invoiceId == null) {
+          continue;
+        }
+
+        final detail = await invoiceRepository.getInvoiceDetail(invoiceId);
         if (detail != null) {
           details.add(detail);
         }
@@ -37,14 +43,12 @@ class _ExportScreenState extends State<ExportScreen> {
       final csv = exportService.buildCsv(details);
 
       if (!mounted) return;
-
       setState(() {
         exportController.text = csv;
         loading = false;
       });
     } catch (e) {
       if (!mounted) return;
-
       setState(() {
         loading = false;
       });
@@ -62,7 +66,6 @@ class _ExportScreenState extends State<ExportScreen> {
     await Clipboard.setData(ClipboardData(text: text));
 
     if (!mounted) return;
-
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Export text copied to clipboard.')),
     );
@@ -115,9 +118,7 @@ class _ExportScreenState extends State<ExportScreen> {
               labelText: 'Export Output',
               border: OutlineInputBorder(),
             ),
-            onChanged: (_) {
-              setState(() {});
-            },
+            onChanged: (_) => setState(() {}),
           ),
         ],
       ),

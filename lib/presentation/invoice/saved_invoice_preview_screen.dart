@@ -40,7 +40,7 @@ class _SavedInvoicePreviewScreenState extends State<SavedInvoicePreviewScreen> {
 
     invoiceNo = detail.header.invoiceNo;
     draft = DraftInvoiceModel(
-      invoiceType: detail.header.invoiceType ?? 'Cash',
+      invoiceType: detail.header.invoiceType,
       customerName: detail.header.customerName,
       sourceMode: detail.header.sourceMode,
       notes: detail.header.notes,

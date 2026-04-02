@@ -1,107 +1,54 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-
-import '../../data/repositories/invoice_repository.dart';
 import '../../domain/models/invoice_detail.dart';
 
-class ExportScreen extends StatefulWidget {
-  const ExportScreen({super.key});
+class ExportService {
+  String buildCsv(List<InvoiceDetailModel> invoices) {
+    final buffer = StringBuffer();
+    buffer.writeln(
+      'Invoice No,Invoice Date,Invoice Type,Customer,Source Mode,Item,Qty,Unit,Rate,Amount,Notes',
+    );
 
-  @override
-  State<ExportScreen> createState() => _ExportScreenState();
-}
+    for (final invoice in invoices) {
+      final header = invoice.header;
 
-class _ExportScreenState extends State<ExportScreen> {
-  bool loading = false;
-  final TextEditingController exportController = TextEditingController();
+      if (invoice.lines.isEmpty) {
+        buffer.writeln([
+          _csv(header.invoiceNo),
+          _csv(header.invoiceDate.toIso8601String().split('T').first),
+          _csv(header.invoiceType),
+          _csv(header.customerName),
+          _csv(header.sourceMode),
+          '',
+          '',
+          '',
+          '',
+          '',
+          _csv(header.notes),
+        ].join(','));
+        continue;
+      }
 
-  get exportService => null;
-
-  Future<void> _buildExport() async {
-    setState(() {
-      loading = true;
-      exportController.clear();
-    });
-
-    final headers = await invoiceRepository.getAllHeaders();
-    final details = <InvoiceDetailModel>[];
-
-    for (final header in headers) {
-      final detail = await invoiceRepository.getInvoiceDetail(header.id!);
-      if (detail != null) {
-        details.add(detail);
+      for (final line in invoice.lines) {
+        buffer.writeln([
+          _csv(header.invoiceNo),
+          _csv(header.invoiceDate.toIso8601String().split('T').first),
+          _csv(header.invoiceType),
+          _csv(header.customerName),
+          _csv(header.sourceMode),
+          _csv(line.itemName),
+          line.qty.toString(),
+          _csv(line.unit),
+          line.rate.toStringAsFixed(2),
+          line.amount.toStringAsFixed(2),
+          _csv(header.notes),
+        ].join(','));
       }
     }
 
-    final csv = exportService.buildCsv(details);
-
-    if (!mounted) return;
-    setState(() {
-      exportController.text = csv;
-      loading = false;
-    });
+    return buffer.toString();
   }
 
-  Future<void> _copyToClipboard() async {
-    final text = exportController.text.trim();
-    if (text.isEmpty) return;
-
-    await Clipboard.setData(ClipboardData(text: text));
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Export text copied to clipboard.')),
-    );
-  }
-
-  @override
-  void dispose() {
-    exportController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Export Center'),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const Card(
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                'This export module currently prepares CSV-style invoice data. It can be extended later into Excel and Tally-ready file output.',
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: loading ? null : _buildExport,
-            icon: const Icon(Icons.file_download),
-            label: Text(loading ? 'Preparing...' : 'Generate Export Data'),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: exportController.text.trim().isEmpty ? null : _copyToClipboard,
-            icon: const Icon(Icons.copy),
-            label: const Text('Copy Export Text'),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: exportController,
-            minLines: 12,
-            maxLines: 20,
-            readOnly: true,
-            decoration: const InputDecoration(
-              labelText: 'Export Output',
-              border: OutlineInputBorder(),
-            ),
-          ),
-        ],
-      ),
-    );
+  String _csv(String value) {
+    final escaped = value.replaceAll('"', '""');
+    return '"$escaped"';
   }
 }

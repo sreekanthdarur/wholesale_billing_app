@@ -174,21 +174,20 @@ class InvoiceRepository {
 
   Future<String> _generateInvoiceNo(DatabaseExecutor txn, DateTime now) async {
     final prefix =
-        'INV-${now.year}${now.month.toString().padLeft(2, '0')}${now.day
-        .toString().padLeft(2, '0')}';
+        'INV-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
 
     final count = await txn.rawQuery(
       '''
-    SELECT COUNT(*) as cnt
-    FROM invoices
-    WHERE invoice_no LIKE ?
-    ''',
+      SELECT COUNT(*) as cnt
+      FROM invoices
+      WHERE invoice_no LIKE ?
+      ''',
       ['$prefix-%'],
     );
 
     final current = ((count.first['cnt'] as int?) ?? 0) + 1;
     return '$prefix-${current.toString().padLeft(4, '0')}';
   }
-
-  final invoiceRepository = InvoiceRepository();
 }
+
+final invoiceRepository = InvoiceRepository();

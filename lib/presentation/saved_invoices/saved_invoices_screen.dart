@@ -58,7 +58,7 @@ class _SavedInvoicesScreenState extends State<SavedInvoicesScreen> {
                             title: Text(
                                 '${invoice.invoiceNo} • ${invoice.customerName}'),
                             subtitle: Text(
-                              '${invoice.invoiceType ?? 'Cash'} • ₹${invoice.total.toStringAsFixed(2)} • ${AppDateUtils.displayDate(invoice.invoiceDate)}',
+                              '${invoice.invoiceType} • ₹${invoice.total.toStringAsFixed(2)} • ${AppDateUtils.displayDate(invoice.invoiceDate)}',
                             ),
                             trailing: const Icon(Icons.visibility),
                             onTap: () async {
