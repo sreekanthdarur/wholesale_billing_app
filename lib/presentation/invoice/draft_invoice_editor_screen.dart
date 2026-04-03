@@ -57,45 +57,71 @@ class _DraftInvoiceEditorScreenState extends State<DraftInvoiceEditorScreen> {
     super.dispose();
   }
 
+  bool _isLineValid(InvoiceLineModel line) {
+    return line.itemName.trim().isNotEmpty &&
+        line.qty > 0 &&
+        line.rate > 0 &&
+        line.amount > 0;
+  }
+
   Future<void> _save() async {
-    final validLines = draft.lines
-        .where((e) => e.itemName.trim().isNotEmpty && e.qty > 0)
-        .toList();
+    final validLines = draft.lines.where(_isLineValid).toList();
 
     if (validLines.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please add at least one valid invoice line.'),
-        ),
+        const SnackBar(content: Text(InvoiceRepository.invalidInvoiceMessage)),
       );
       return;
     }
 
     setState(() => saving = true);
 
-    final updatedDraft = draft.copyWith(
+    final updatedDraft = DraftInvoiceModel(
+      invoiceType: draft.invoiceType,
       customerName: customerController.text.trim().isEmpty
           ? 'Cash'
           : customerController.text.trim(),
+      sourceMode: draft.sourceMode,
       notes: notesController.text.trim(),
       rawInputText: rawTextController.text.trim(),
+      invoiceDate: draft.invoiceDate,
       lines: validLines,
     );
 
-    final id = await invoiceRepository.createInvoiceFromDraft(updatedDraft);
+    if (updatedDraft.total <= 0) {
+      setState(() => saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(InvoiceRepository.invalidInvoiceMessage)),
+      );
+      return;
+    }
 
-    if (!mounted) return;
-    setState(() {
-      draft = updatedDraft;
-      saving = false;
-    });
+    final messenger = ScaffoldMessenger.of(context);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Invoice saved successfully. ID: $id')),
-    );
+    try {
+      await invoiceRepository.createInvoiceFromDraft(updatedDraft);
 
-    if (widget.saveAndPopToHome) {
+      if (!mounted) return;
+      setState(() {
+        draft = updatedDraft;
+        saving = false;
+      });
+
       Navigator.popUntil(context, (route) => route.isFirst);
+
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('Invoice saved successfully.')),
+        );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => saving = false);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Invalid argument(s): ', '')),
+        ),
+      );
     }
   }
 
@@ -151,7 +177,15 @@ class _DraftInvoiceEditorScreenState extends State<DraftInvoiceEditorScreen> {
                           onChanged: (value) {
                             if (value == null) return;
                             setState(() {
-                              draft = draft.copyWith(invoiceType: value);
+                              draft = DraftInvoiceModel(
+                                invoiceType: value,
+                                customerName: draft.customerName,
+                                sourceMode: draft.sourceMode,
+                                notes: draft.notes,
+                                rawInputText: draft.rawInputText,
+                                invoiceDate: draft.invoiceDate,
+                                lines: draft.lines,
+                              );
                             });
                           },
                         ),
@@ -222,12 +256,10 @@ class _DraftInvoiceEditorScreenState extends State<DraftInvoiceEditorScreen> {
                               border: OutlineInputBorder(),
                             ),
                             onChanged: (value) {
-                              final updatedLines = [...draft.lines];
-                              updatedLines[index] = item.copyWith(
-                                itemName: value,
-                              );
                               setState(() {
-                                draft = draft.copyWith(lines: updatedLines);
+                                draft.lines[index] = item.copyWith(
+                                  itemName: value,
+                                );
                               });
                             },
                           ),
@@ -246,13 +278,9 @@ class _DraftInvoiceEditorScreenState extends State<DraftInvoiceEditorScreen> {
                                         decimal: true,
                                       ),
                                   onChanged: (value) {
-                                    final updatedLines = [...draft.lines];
-                                    updatedLines[index] = item.copyWith(
-                                      qty: double.tryParse(value) ?? item.qty,
-                                    );
                                     setState(() {
-                                      draft = draft.copyWith(
-                                        lines: updatedLines,
+                                      draft.lines[index] = item.copyWith(
+                                        qty: double.tryParse(value) ?? item.qty,
                                       );
                                     });
                                   },
@@ -271,13 +299,10 @@ class _DraftInvoiceEditorScreenState extends State<DraftInvoiceEditorScreen> {
                                         decimal: true,
                                       ),
                                   onChanged: (value) {
-                                    final updatedLines = [...draft.lines];
-                                    updatedLines[index] = item.copyWith(
-                                      rate: double.tryParse(value) ?? item.rate,
-                                    );
                                     setState(() {
-                                      draft = draft.copyWith(
-                                        lines: updatedLines,
+                                      draft.lines[index] = item.copyWith(
+                                        rate:
+                                            double.tryParse(value) ?? item.rate,
                                       );
                                     });
                                   },
@@ -287,12 +312,8 @@ class _DraftInvoiceEditorScreenState extends State<DraftInvoiceEditorScreen> {
                                 onPressed: draft.lines.length == 1
                                     ? null
                                     : () {
-                                        final updatedLines = [...draft.lines]
-                                          ..removeAt(index);
                                         setState(() {
-                                          draft = draft.copyWith(
-                                            lines: updatedLines,
-                                          );
+                                          draft.lines.removeAt(index);
                                         });
                                       },
                                 icon: const Icon(
@@ -319,10 +340,8 @@ class _DraftInvoiceEditorScreenState extends State<DraftInvoiceEditorScreen> {
                                 .toList(),
                             onChanged: (value) {
                               if (value == null) return;
-                              final updatedLines = [...draft.lines];
-                              updatedLines[index] = item.copyWith(unit: value);
                               setState(() {
-                                draft = draft.copyWith(lines: updatedLines);
+                                draft.lines[index] = item.copyWith(unit: value);
                               });
                             },
                           ),
@@ -334,12 +353,10 @@ class _DraftInvoiceEditorScreenState extends State<DraftInvoiceEditorScreen> {
                               border: OutlineInputBorder(),
                             ),
                             onChanged: (value) {
-                              final updatedLines = [...draft.lines];
-                              updatedLines[index] = item.copyWith(
-                                sourceText: value,
-                              );
                               setState(() {
-                                draft = draft.copyWith(lines: updatedLines);
+                                draft.lines[index] = item.copyWith(
+                                  sourceText: value,
+                                );
                               });
                             },
                           ),
@@ -348,12 +365,10 @@ class _DraftInvoiceEditorScreenState extends State<DraftInvoiceEditorScreen> {
                             title: const Text('Custom Rate'),
                             value: item.isCustomRate,
                             onChanged: (value) {
-                              final updatedLines = [...draft.lines];
-                              updatedLines[index] = item.copyWith(
-                                isCustomRate: value,
-                              );
                               setState(() {
-                                draft = draft.copyWith(lines: updatedLines);
+                                draft.lines[index] = item.copyWith(
+                                  isCustomRate: value,
+                                );
                               });
                             },
                           ),
@@ -362,19 +377,17 @@ class _DraftInvoiceEditorScreenState extends State<DraftInvoiceEditorScreen> {
                             title: const Text('Needs Review'),
                             value: item.needsReview,
                             onChanged: (value) {
-                              final updatedLines = [...draft.lines];
-                              updatedLines[index] = item.copyWith(
-                                needsReview: value,
-                              );
                               setState(() {
-                                draft = draft.copyWith(lines: updatedLines);
+                                draft.lines[index] = item.copyWith(
+                                  needsReview: value,
+                                );
                               });
                             },
                           ),
                           Align(
                             alignment: Alignment.centerRight,
                             child: Text(
-                              'Amount: ₹${item.amount.toStringAsFixed(2)}',
+                              'Amount: ₹${draft.lines[index].amount.toStringAsFixed(2)}',
                               style: const TextStyle(
                                 fontWeight: FontWeight.w600,
                               ),
@@ -387,17 +400,15 @@ class _DraftInvoiceEditorScreenState extends State<DraftInvoiceEditorScreen> {
                 }),
                 OutlinedButton(
                   onPressed: () {
-                    final updatedLines = [
-                      ...draft.lines,
-                      InvoiceLineModel(
-                        itemName: '',
-                        qty: 1,
-                        unit: 'kg',
-                        rate: 0,
-                      ),
-                    ];
                     setState(() {
-                      draft = draft.copyWith(lines: updatedLines);
+                      draft.lines.add(
+                        InvoiceLineModel(
+                          itemName: '',
+                          qty: 1,
+                          unit: 'kg',
+                          rate: 0,
+                        ),
+                      );
                     });
                   },
                   child: const Text('Add Item Line'),

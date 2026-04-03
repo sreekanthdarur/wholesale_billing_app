@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
+
 import '../../core/utils/date_utils.dart';
 import '../../domain/models/draft_invoice.dart';
 
 class PreviewCard extends StatelessWidget {
   final DraftInvoiceModel draft;
+  final String? invoiceNo;
 
-  const PreviewCard({super.key, required this.draft});
+  const PreviewCard({super.key, required this.draft, this.invoiceNo});
 
   @override
   Widget build(BuildContext context) {
+    final hasInvoiceNo = invoiceNo != null && invoiceNo!.trim().isNotEmpty;
+
     return Card(
       elevation: 3,
       child: Container(
@@ -25,6 +29,11 @@ class PreviewCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
+            if (hasInvoiceNo)
+              Text(
+                'Invoice No: ${invoiceNo!.trim()}',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
             Text(
               'Customer: ${draft.customerName}',
               style: const TextStyle(fontWeight: FontWeight.w600),

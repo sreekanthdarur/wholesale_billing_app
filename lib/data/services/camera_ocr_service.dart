@@ -64,18 +64,20 @@ class CameraOcrService {
       final alias = itemAliasService.match(line, dbItems: dbItems);
       final unit = _detectUnit(line, alias.unit ?? 'kg');
       final qty = _detectQuantity(line);
-      final rate = _detectRate(line, qty);
+      final explicitRate = _detectRate(line, qty);
 
       if (alias.canonicalName != null) {
-        if (_hasMeaningfulNumbers(line)) {
+        final resolvedRate = explicitRate ?? alias.defaultRate ?? 0;
+
+        if (resolvedRate > 0) {
           parsedLines.add(
             InvoiceLineModel(
               itemName: alias.canonicalName!,
-              qty: qty,
+              qty: qty > 0 ? qty : 1,
               unit: unit,
-              rate: rate ?? alias.defaultRate ?? 0,
-              isCustomRate: rate != null,
-              needsReview: rate == null,
+              rate: resolvedRate,
+              isCustomRate: explicitRate != null,
+              needsReview: explicitRate == null,
               sourceText: line,
             ),
           );
@@ -84,8 +86,8 @@ class CameraOcrService {
             MissingItemModel(
               itemName: alias.canonicalName!,
               unit: unit,
-              qty: qty,
-              detectedRate: rate,
+              qty: qty > 0 ? qty : 1,
+              detectedRate: explicitRate,
               sourceText: line,
             ),
           );
@@ -97,8 +99,8 @@ class CameraOcrService {
             MissingItemModel(
               itemName: guessedName,
               unit: unit,
-              qty: qty,
-              detectedRate: rate,
+              qty: qty > 0 ? qty : 1,
+              detectedRate: explicitRate,
               sourceText: line,
             ),
           );
@@ -107,6 +109,9 @@ class CameraOcrService {
     }
 
     final merged = _mergeService.merge(parsedLines);
+    final safeLines = merged
+        .where((line) => line.itemName.trim().isNotEmpty)
+        .toList();
 
     final draft = DraftInvoiceModel(
       invoiceType: invoiceType,
@@ -115,7 +120,7 @@ class CameraOcrService {
       notes: 'Draft generated from OCR',
       rawInputText: cleanedLines.join('\n'),
       invoiceDate: DateTime.now(),
-      lines: merged.isEmpty
+      lines: safeLines.isEmpty
           ? [
               InvoiceLineModel(
                 itemName: 'Review Item',
@@ -126,7 +131,7 @@ class CameraOcrService {
                 sourceText: 'No confident OCR parse',
               ),
             ]
-          : merged,
+          : safeLines,
     );
 
     return OcrParseResult(
@@ -221,10 +226,6 @@ class CameraOcrService {
         t.contains('mobile');
   }
 
-  bool _hasMeaningfulNumbers(String text) {
-    return RegExp(r'\d').hasMatch(text);
-  }
-
   String _detectUnit(String text, String fallback) {
     final t = text.toLowerCase();
 
@@ -261,31 +262,40 @@ class CameraOcrService {
 
     final allNumbers = RegExp(r'(\d+(?:\.\d+)?)').allMatches(t).toList();
     if (allNumbers.isNotEmpty) {
-      return double.tryParse(allNumbers.first.group(1) ?? '') ?? 1.0;
+      final first = double.tryParse(allNumbers.first.group(1) ?? '');
+      if (first != null && first > 0 && first <= 100) {
+        return first;
+      }
     }
 
     return 1.0;
   }
 
   double? _detectRate(String text, double qty) {
-    final t = text.toLowerCase();
+    final normalized = text.toLowerCase();
+
+    final explicitPattern = RegExp(
+      r'\b(?:rate|price|amt|amount)\s*[:\-]?\s*(\d+(?:\.\d+)?)\b',
+    ).firstMatch(normalized);
+    if (explicitPattern != null) {
+      return double.tryParse(explicitPattern.group(1) ?? '');
+    }
+
     final numbers = RegExp(r'(\d+(?:\.\d+)?)')
-        .allMatches(t)
+        .allMatches(normalized)
         .map((m) => double.tryParse(m.group(1) ?? ''))
         .whereType<double>()
         .toList();
 
-    if (numbers.length <= 1) return null;
+    if (numbers.isEmpty) return null;
 
     final candidates = numbers.where((n) => (n - qty).abs() > 0.0001).toList();
     if (candidates.isEmpty) return null;
 
-    final bigCandidates = candidates.where((n) => n > 20).toList();
-    if (bigCandidates.isNotEmpty) {
-      return bigCandidates.last;
-    }
+    final highConfidence = candidates.where((n) => n > 0).toList();
+    if (highConfidence.isEmpty) return null;
 
-    return candidates.last;
+    return highConfidence.last;
   }
 
   String _extractUnknownItemName(String text) {
@@ -295,7 +305,7 @@ class CameraOcrService {
         .replaceAll(RegExp(r'\b\d+(?:\.\d+)?\b'), ' ')
         .replaceAll(
           RegExp(
-            r'\b(kg|kgs|kilogram|kilograms|ltr|litre|liter|liters|litres|g|gm|gms|gram|grams|pc|pcs|piece|pieces|rate|price)\b',
+            r'\b(kg|kgs|kilogram|kilograms|ltr|litre|liter|liters|litres|g|gm|gms|gram|grams|pc|pcs|piece|pieces|rate|price|amt|amount)\b',
           ),
           ' ',
         )

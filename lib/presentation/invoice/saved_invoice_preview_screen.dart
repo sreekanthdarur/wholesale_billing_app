@@ -69,6 +69,7 @@ class _SavedInvoicePreviewScreenState extends State<SavedInvoicePreviewScreen> {
         builder: (_) => PrintPreviewScreen(
           title: 'Print Preview $invoiceNo',
           draft: draft!,
+          invoiceNo: invoiceNo,
         ),
       ),
     );
@@ -85,7 +86,7 @@ class _SavedInvoicePreviewScreenState extends State<SavedInvoicePreviewScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          PreviewCard(draft: draft!),
+          PreviewCard(draft: draft!, invoiceNo: invoiceNo),
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: _edit,

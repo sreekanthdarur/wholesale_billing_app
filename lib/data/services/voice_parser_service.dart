@@ -70,17 +70,31 @@ class VoiceParserService {
       final explicitRate = _detectRate(segment, qty);
 
       if (alias.canonicalName != null) {
-        parsedLines.add(
-          InvoiceLineModel(
-            itemName: alias.canonicalName!,
-            qty: qty,
-            unit: unit,
-            rate: explicitRate ?? alias.defaultRate ?? 0,
-            isCustomRate: explicitRate != null,
-            needsReview: explicitRate == null,
-            sourceText: segment,
-          ),
-        );
+        final resolvedRate = explicitRate ?? alias.defaultRate ?? 0;
+
+        if (resolvedRate > 0) {
+          parsedLines.add(
+            InvoiceLineModel(
+              itemName: alias.canonicalName!,
+              qty: qty > 0 ? qty : 1,
+              unit: unit,
+              rate: resolvedRate,
+              isCustomRate: explicitRate != null,
+              needsReview: explicitRate == null,
+              sourceText: segment,
+            ),
+          );
+        } else {
+          missingItems.add(
+            MissingItemModel(
+              itemName: alias.canonicalName!,
+              unit: unit,
+              qty: qty > 0 ? qty : 1,
+              detectedRate: explicitRate,
+              sourceText: segment,
+            ),
+          );
+        }
       } else {
         final guessedName = _extractUnknownItemName(segment);
         if (guessedName.isNotEmpty) {
@@ -88,7 +102,7 @@ class VoiceParserService {
             MissingItemModel(
               itemName: guessedName,
               unit: unit,
-              qty: qty,
+              qty: qty > 0 ? qty : 1,
               detectedRate: explicitRate,
               sourceText: segment,
             ),
@@ -98,6 +112,9 @@ class VoiceParserService {
     }
 
     final merged = _mergeService.merge(parsedLines);
+    final safeLines = merged
+        .where((line) => line.itemName.trim().isNotEmpty)
+        .toList();
 
     final draft = DraftInvoiceModel(
       invoiceType: invoiceType,
@@ -106,7 +123,7 @@ class VoiceParserService {
       notes: 'Draft generated from transcript',
       rawInputText: cleanedTranscript,
       invoiceDate: DateTime.now(),
-      lines: merged.isEmpty
+      lines: safeLines.isEmpty
           ? [
               InvoiceLineModel(
                 itemName: 'Review Item',
@@ -117,7 +134,7 @@ class VoiceParserService {
                 sourceText: 'No confident voice parse',
               ),
             ]
-          : merged,
+          : safeLines,
     );
 
     return VoiceParseResult(
@@ -226,7 +243,7 @@ class VoiceParserService {
     final t = text.toLowerCase();
 
     final rateKeyword = RegExp(
-      r'\b(?:rate|price)\s*(?:is\s*)?(\d+(?:\.\d+)?)\b',
+      r'\b(?:rate|price|amt|amount)\s*(?:is\s*)?(\d+(?:\.\d+)?)\b',
     ).firstMatch(t);
     if (rateKeyword != null) {
       return double.tryParse(rateKeyword.group(1) ?? '');
@@ -243,10 +260,7 @@ class VoiceParserService {
     final candidates = nums.where((n) => (n - qty).abs() > 0.0001).toList();
     if (candidates.isEmpty) return null;
 
-    final bigCandidates = candidates.where((n) => n > 20).toList();
-    if (bigCandidates.isNotEmpty) return bigCandidates.last;
-
-    return candidates.last;
+    return candidates.lastWhere((n) => n > 0, orElse: () => candidates.last);
   }
 
   String _extractUnknownItemName(String text) {
@@ -260,7 +274,7 @@ class VoiceParserService {
         .replaceAll(RegExp(r'\b\d+(?:\.\d+)?\b'), ' ')
         .replaceAll(
           RegExp(
-            r'\b(kg|kgs|kilogram|kilograms|kilo|ltr|litre|liter|liters|litres|g|gm|gms|gram|grams|pc|pcs|piece|pieces|packet|packets|rate|price)\b',
+            r'\b(kg|kgs|kilogram|kilograms|kilo|ltr|litre|liter|liters|litres|g|gm|gms|gram|grams|pc|pcs|piece|pieces|packet|packets|rate|price|amt|amount)\b',
           ),
           ' ',
         )

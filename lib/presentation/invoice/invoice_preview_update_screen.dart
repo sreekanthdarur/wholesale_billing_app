@@ -26,22 +26,55 @@ class _InvoicePreviewUpdateScreenState
     extends State<InvoicePreviewUpdateScreen> {
   bool saving = false;
 
+  bool _isDraftSaveable(DraftInvoiceModel draft) {
+    final validLines = draft.lines.where((line) {
+      return line.itemName.trim().isNotEmpty &&
+          line.qty > 0 &&
+          line.rate > 0 &&
+          line.amount > 0;
+    }).toList();
+
+    return validLines.isNotEmpty && draft.total > 0;
+  }
+
   Future<void> _updateInvoice() async {
+    if (!_isDraftSaveable(widget.draft)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(InvoiceRepository.invalidInvoiceMessage)),
+      );
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+
     setState(() => saving = true);
 
-    await invoiceRepository.updateInvoice(
-      invoiceId: widget.invoiceId,
-      draft: widget.draft,
-    );
+    try {
+      await invoiceRepository.updateInvoice(
+        invoiceId: widget.invoiceId,
+        draft: widget.draft,
+      );
 
-    if (!mounted) return;
-    setState(() => saving = false);
+      if (!mounted) return;
+      setState(() => saving = false);
 
-    Navigator.popUntil(context, (route) => route.isFirst);
+      Navigator.popUntil(context, (route) => route.isFirst);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Invoice updated successfully')),
-    );
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('Invoice updated successfully.')),
+        );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => saving = false);
+
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Invalid argument(s): ', '')),
+        ),
+      );
+    }
   }
 
   void _openPrintPreview() {
@@ -51,6 +84,7 @@ class _InvoicePreviewUpdateScreenState
         builder: (_) => PrintPreviewScreen(
           title: 'Print Preview ${widget.invoiceNo}',
           draft: widget.draft,
+          invoiceNo: widget.invoiceNo,
         ),
       ),
     );
@@ -63,7 +97,7 @@ class _InvoicePreviewUpdateScreenState
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          PreviewCard(draft: widget.draft),
+          PreviewCard(draft: widget.draft, invoiceNo: widget.invoiceNo),
           const SizedBox(height: 12),
           FilledButton.icon(
             onPressed: saving ? null : _updateInvoice,

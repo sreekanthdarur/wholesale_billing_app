@@ -6,7 +6,11 @@ import '../../domain/models/invoice_line.dart';
 import 'package:sqflite/sqflite.dart';
 
 class InvoiceRepository {
+  static const String invalidInvoiceMessage =
+      'Invoice cannot be saved. Please add at least one valid item with quantity greater than 0 and amount greater than 0.';
+
   Future<int> createInvoiceFromDraft(DraftInvoiceModel draft) async {
+    final sanitizedDraft = _validatedDraft(draft);
     final db = await AppDatabase.instance.database;
 
     return db.transaction((txn) async {
@@ -15,18 +19,18 @@ class InvoiceRepository {
 
       final invoiceId = await txn.insert('invoices', {
         'invoice_no': invoiceNo,
-        'invoice_date': draft.invoiceDate.toIso8601String(),
-        'invoice_type': draft.invoiceType,
-        'customer_name': draft.customerName,
-        'source_mode': draft.sourceMode,
-        'notes': draft.notes,
-        'raw_input_text': draft.rawInputText,
-        'total': draft.total,
+        'invoice_date': sanitizedDraft.invoiceDate.toIso8601String(),
+        'invoice_type': sanitizedDraft.invoiceType,
+        'customer_name': sanitizedDraft.customerName,
+        'source_mode': sanitizedDraft.sourceMode,
+        'notes': sanitizedDraft.notes,
+        'raw_input_text': sanitizedDraft.rawInputText,
+        'total': sanitizedDraft.total,
         'created_at': now.toIso8601String(),
         'updated_at': now.toIso8601String(),
       });
 
-      for (final line in draft.lines) {
+      for (final line in sanitizedDraft.lines) {
         await txn.insert('invoice_lines', {
           'invoice_id': invoiceId,
           'item_name': line.itemName,
@@ -48,19 +52,20 @@ class InvoiceRepository {
     required int invoiceId,
     required DraftInvoiceModel draft,
   }) async {
+    final sanitizedDraft = _validatedDraft(draft);
     final db = await AppDatabase.instance.database;
 
     await db.transaction((txn) async {
       await txn.update(
         'invoices',
         {
-          'invoice_date': draft.invoiceDate.toIso8601String(),
-          'invoice_type': draft.invoiceType,
-          'customer_name': draft.customerName,
-          'source_mode': draft.sourceMode,
-          'notes': draft.notes,
-          'raw_input_text': draft.rawInputText,
-          'total': draft.total,
+          'invoice_date': sanitizedDraft.invoiceDate.toIso8601String(),
+          'invoice_type': sanitizedDraft.invoiceType,
+          'customer_name': sanitizedDraft.customerName,
+          'source_mode': sanitizedDraft.sourceMode,
+          'notes': sanitizedDraft.notes,
+          'raw_input_text': sanitizedDraft.rawInputText,
+          'total': sanitizedDraft.total,
           'updated_at': DateTime.now().toIso8601String(),
         },
         where: 'id = ?',
@@ -73,7 +78,7 @@ class InvoiceRepository {
         whereArgs: [invoiceId],
       );
 
-      for (final line in draft.lines) {
+      for (final line in sanitizedDraft.lines) {
         await txn.insert('invoice_lines', {
           'invoice_id': invoiceId,
           'item_name': line.itemName,
@@ -87,6 +92,41 @@ class InvoiceRepository {
         });
       }
     });
+  }
+
+  DraftInvoiceModel _validatedDraft(DraftInvoiceModel draft) {
+    final validLines = draft.lines
+        .whereType<InvoiceLineModel>()
+        .where(
+          (line) =>
+              line.itemName.trim().isNotEmpty &&
+              line.qty > 0 &&
+              line.rate > 0 &&
+              line.amount > 0,
+        )
+        .toList();
+
+    if (validLines.isEmpty) {
+      throw ArgumentError(invalidInvoiceMessage);
+    }
+
+    final sanitizedDraft = DraftInvoiceModel(
+      invoiceType: draft.invoiceType,
+      customerName: draft.customerName.trim().isEmpty
+          ? 'Cash'
+          : draft.customerName.trim(),
+      sourceMode: draft.sourceMode,
+      notes: draft.notes,
+      rawInputText: draft.rawInputText,
+      invoiceDate: draft.invoiceDate,
+      lines: validLines,
+    );
+
+    if (sanitizedDraft.total <= 0) {
+      throw ArgumentError(invalidInvoiceMessage);
+    }
+
+    return sanitizedDraft;
   }
 
   Future<List<InvoiceHeaderModel>> getAllHeaders() async {

@@ -6,11 +6,13 @@ import '../widgets/preview_card.dart';
 class PrintPreviewScreen extends StatelessWidget {
   final String title;
   final DraftInvoiceModel draft;
+  final String? invoiceNo;
 
   const PrintPreviewScreen({
     super.key,
     required this.title,
     required this.draft,
+    this.invoiceNo,
   });
 
   @override
@@ -20,13 +22,13 @@ class PrintPreviewScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          PreviewCard(draft: draft),
+          PreviewCard(draft: draft, invoiceNo: invoiceNo),
           const SizedBox(height: 12),
           const Card(
             child: Padding(
               padding: EdgeInsets.all(16),
               child: Text(
-                'This is the print preview foundation. Thermal printer / Bluetooth / device-print integration can be added in the next phase.',
+                'This is the print preview foundation.\nThermal printer / Bluetooth / device-print integration can be added in the next phase.',
               ),
             ),
           ),

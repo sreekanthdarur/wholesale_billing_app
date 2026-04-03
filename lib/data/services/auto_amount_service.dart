@@ -79,11 +79,11 @@ class AutoAmountService {
       );
     }
 
-    // Base quantity of 1 for each selected item when affordable.
     final minBase = selected.fold<double>(
       0,
       (sum, item) => sum + item.defaultRate,
     );
+
     if (remaining >= minBase) {
       for (final item in selected) {
         lines.add(
@@ -101,7 +101,6 @@ class AutoAmountService {
       }
     }
 
-    // Distribute remaining budget more evenly instead of overfilling the first item.
     var pointer = 0;
     while (remaining >= 45 && pointer < 300) {
       final item = selected[pointer % selected.length];
@@ -128,7 +127,6 @@ class AutoAmountService {
       pointer++;
     }
 
-    // Fallback if target amount is smaller than all base totals.
     if (lines.isEmpty) {
       final cheapest = _catalog.reduce(
         (a, b) => a.defaultRate <= b.defaultRate ? a : b,
@@ -139,6 +137,7 @@ class AutoAmountService {
           qty: 1,
           unit: cheapest.unit,
           rate: cheapest.defaultRate,
+          needsReview: true,
           sourceText: 'Auto-generated fallback line',
         ),
       );
@@ -147,34 +146,32 @@ class AutoAmountService {
       );
     }
 
-    // Final adjustment on first line only for exact balancing.
-    if (lines.isNotEmpty && remaining.abs() > 0.009) {
-      final current = lines.first;
-      final adjustedRate = double.parse(
-        (current.rate + remaining).toStringAsFixed(2),
-      );
-
-      if (adjustedRate > 0) {
-        lines[0] = current.copyWith(
-          rate: adjustedRate,
-          isCustomRate: true,
-          needsReview: true,
-          sourceText: 'Auto-adjusted to match target amount',
-        );
-      }
-    }
-
     final merged = invoiceLineMergeService.merge(lines);
-
     final draft = DraftInvoiceModel(
       invoiceType: invoiceType,
       customerName: customerName,
       sourceMode: 'auto_amount',
-      notes:
-          'Balanced draft generated from target amount ₹${roundedTarget.toStringAsFixed(2)}',
+      notes: remaining == 0
+          ? 'Balanced draft generated from target amount ₹${roundedTarget.toStringAsFixed(2)}'
+          : 'Balanced draft generated from target amount ₹${roundedTarget.toStringAsFixed(2)}. Review needed: generated total differs by ₹${remaining.abs().toStringAsFixed(2)} while keeping item master prices unchanged.',
       rawInputText: 'Target Amount: ₹${roundedTarget.toStringAsFixed(2)}',
       invoiceDate: DateTime.now(),
-      lines: merged,
+      lines: merged
+          .asMap()
+          .entries
+          .map(
+            (entry) => remaining == 0
+                ? entry.value
+                : entry.value.copyWith(
+                    needsReview: entry.key == 0
+                        ? true
+                        : entry.value.needsReview,
+                    sourceText: entry.key == 0
+                        ? 'Review variance against target amount without changing item master prices'
+                        : entry.value.sourceText,
+                  ),
+          )
+          .toList(),
     );
 
     final difference = double.parse(

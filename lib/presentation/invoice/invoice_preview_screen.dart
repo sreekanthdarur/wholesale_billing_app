@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../data/repositories/invoice_repository.dart';
 import '../../domain/models/draft_invoice.dart';
 import '../print/print_preview_screen.dart';
@@ -16,16 +17,53 @@ class InvoicePreviewScreen extends StatefulWidget {
 
 class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
   bool saving = false;
-  final InvoiceRepository invoiceRepository = InvoiceRepository();
+
+  bool _isDraftSaveable(DraftInvoiceModel draft) {
+    final validLines = draft.lines.where((line) {
+      return line.itemName.trim().isNotEmpty &&
+          line.qty > 0 &&
+          line.rate > 0 &&
+          line.amount > 0;
+    }).toList();
+
+    return validLines.isNotEmpty && draft.total > 0;
+  }
+
   Future<void> _save() async {
+    if (!_isDraftSaveable(widget.initialDraft)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(InvoiceRepository.invalidInvoiceMessage)),
+      );
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+
     setState(() => saving = true);
-    await invoiceRepository.createInvoiceFromDraft(widget.initialDraft);
-    if (!mounted) return;
-    setState(() => saving = false);
-    Navigator.popUntil(context, (route) => route.isFirst);
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Invoice saved successfully')));
+
+    try {
+      await invoiceRepository.createInvoiceFromDraft(widget.initialDraft);
+
+      if (!mounted) return;
+      setState(() => saving = false);
+
+      Navigator.popUntil(context, (route) => route.isFirst);
+
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('Invoice saved successfully.')),
+        );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => saving = false);
+
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Invalid argument(s): ', '')),
+        ),
+      );
+    }
   }
 
   void _edit() {
