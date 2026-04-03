@@ -15,9 +15,9 @@ class ItemAliasMatchResult {
 
 class ItemAliasService {
   ItemAliasMatchResult match(
-    String text, {
-    List<ItemModel> dbItems = const [],
-  }) {
+      String text, {
+        List<ItemModel> dbItems = const [],
+      }) {
     final normalized = _normalize(text);
 
     String? bestName;
@@ -25,16 +25,13 @@ class ItemAliasService {
     double? bestRate;
     var bestScore = 0;
 
-    // 1. Static aliases
     AppConstants.itemAliases.forEach((canonical, aliases) {
       for (final alias in aliases) {
         final aliasNormalized = _normalize(alias);
-
         if (_containsAlias(normalized, aliasNormalized) &&
             aliasNormalized.length > bestScore) {
           bestScore = aliasNormalized.length;
           bestName = canonical;
-
           final defaults = AppConstants.itemDefaults[canonical]!;
           bestUnit = defaults['unit'] as String;
           bestRate = defaults['rate'] as double;
@@ -42,13 +39,10 @@ class ItemAliasService {
       }
     });
 
-    // 2. DB items
     for (final item in dbItems) {
-      final allAliases = <String>[item.name, ...item.aliases];
-
+      final allAliases = [item.name, ...item.aliases];
       for (final alias in allAliases) {
         final aliasNormalized = _normalize(alias);
-
         if (_containsAlias(normalized, aliasNormalized) &&
             aliasNormalized.length > bestScore) {
           bestScore = aliasNormalized.length;

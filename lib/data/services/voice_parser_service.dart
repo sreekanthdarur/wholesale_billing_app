@@ -11,7 +11,10 @@ class VoiceParseResult {
   final DraftInvoiceModel draft;
   final List<MissingItemModel> missingItems;
 
-  const VoiceParseResult({required this.draft, required this.missingItems});
+  const VoiceParseResult({
+    required this.draft,
+    required this.missingItems,
+  });
 }
 
 class VoiceParserService {
@@ -51,6 +54,134 @@ class VoiceParserService {
     'ardha_kn': '0.5',
   };
 
+  static const Map<String, String> _scriptNormalization = {
+    'राइस': 'rice',
+    'चावल': 'rice',
+    'शुगर': 'sugar',
+    'चीनी': 'sugar',
+    'शक्कर': 'sugar',
+    'चिप्स': 'chips',
+    'तेल': 'oil',
+    'दाल': 'dal',
+    'तूर दाल': 'toor dal',
+    'अरहर दाल': 'toor dal',
+    'नमक': 'salt',
+    'दूध': 'milk',
+    'दही': 'curd',
+    'आटा': 'atta',
+    'साबुन': 'soap',
+    'बिस्किट': 'biscuits',
+    'कॉफी': 'coffee powder',
+    'चाय पत्ती': 'tea powder',
+    'डिटर्जेंट': 'detergent',
+
+    'బియ్యం': 'rice',
+    'రైస్': 'rice',
+    'చక్కెర': 'sugar',
+    'షుగర్': 'sugar',
+    'చిప్స్': 'chips',
+    'నూనె': 'oil',
+    'పప్పు': 'dal',
+    'ఉప్పు': 'salt',
+    'పాలు': 'milk',
+    'పెరుగు': 'curd',
+    'పిండి': 'atta',
+    'సబ్బు': 'soap',
+    'బిస్కెట్': 'biscuits',
+    'కాఫీ': 'coffee powder',
+    'టీ పొడి': 'tea powder',
+
+    'ಸಕ್ಕರೆ': 'sugar',
+    'ಅಕ್ಕಿ': 'rice',
+    'ರೈಸ್': 'rice',
+    'ಚಿಪ್ಸ್': 'chips',
+    'ಎಣ್ಣೆ': 'oil',
+    'ಬೇಳೆ': 'dal',
+    'ಉಪ್ಪು': 'salt',
+    'ಹಾಲು': 'milk',
+    'ಮೊಸರು': 'curd',
+    'ಹಿಟ್ಟು': 'atta',
+    'ಸಾಬೂನು': 'soap',
+    'ಬಿಸ್ಕಟ್': 'biscuits',
+    'ಕಾಫಿ': 'coffee powder',
+    'ಟೀ ಪುಡಿ': 'tea powder',
+
+    'किलो': 'kg',
+    'केजी': 'kg',
+    'किग्रा': 'kg',
+    'लीटर': 'ltr',
+    'पीस': 'pcs',
+    'पैकेट': 'pcs',
+    'रुपये': 'rate',
+    'రేటు': 'rate',
+    'కిలో': 'kg',
+    'లీటర్': 'ltr',
+    'పీస్': 'pcs',
+    'ಪೀಸ್': 'pcs',
+    'ಕಿಲೋ': 'kg',
+    'ಲೀಟರ್': 'ltr',
+    'ದರ': 'rate',
+  };
+
+  static const Set<String> _noiseTokens = {
+    'kg',
+    'kgs',
+    'ltr',
+    'g',
+    'gm',
+    'pcs',
+    'piece',
+    'pieces',
+    'packet',
+    'packets',
+    'rate',
+    'price',
+    'amt',
+    'amount',
+    'rupees',
+    'rs',
+    'rupaye',
+    'rupaya',
+    'kilo',
+    'kilogram',
+    'litre',
+    'liter',
+    'liters',
+    'litres',
+    'gram',
+    'grams',
+    'ke',
+    'ko',
+    'ka',
+    'ki',
+    'de',
+    'dijiye',
+    'dijie',
+    'kejiye',
+    'kijiye',
+    'please',
+    'plz',
+    'andi',
+    'ivvu',
+    'ivvandi',
+    'kodi',
+    'और',
+    'दे',
+    'दीजिए',
+    'दिजिए',
+    'केजिए',
+    'ಕೊಡಿ',
+    'మరియు',
+    'aur',
+    'mariyu',
+    'mattu',
+    'phir',
+    'tarvata',
+    'aamele',
+    'next',
+    'and',
+  };
+
   Future<VoiceParseResult> parseTranscript({
     required String transcript,
     String invoiceType = 'Cash',
@@ -63,8 +194,10 @@ class VoiceParserService {
     final parsedLines = <InvoiceLineModel>[];
     final missingItems = <MissingItemModel>[];
 
-    for (final segment in segments) {
+    for (final rawSegment in segments) {
+      final segment = _normalizeForMatching(rawSegment);
       final alias = itemAliasService.match(segment, dbItems: dbItems);
+
       final unit = _detectUnit(segment, alias.unit ?? 'kg');
       final qty = _detectQuantity(segment);
       final explicitRate = _detectRate(segment, qty);
@@ -81,7 +214,7 @@ class VoiceParserService {
               rate: resolvedRate,
               isCustomRate: explicitRate != null,
               needsReview: explicitRate == null,
-              sourceText: segment,
+              sourceText: rawSegment,
             ),
           );
         } else {
@@ -91,7 +224,7 @@ class VoiceParserService {
               unit: unit,
               qty: qty > 0 ? qty : 1,
               detectedRate: explicitRate,
-              sourceText: segment,
+              sourceText: rawSegment,
             ),
           );
         }
@@ -104,7 +237,7 @@ class VoiceParserService {
               unit: unit,
               qty: qty > 0 ? qty : 1,
               detectedRate: explicitRate,
-              sourceText: segment,
+              sourceText: rawSegment,
             ),
           );
         }
@@ -112,9 +245,8 @@ class VoiceParserService {
     }
 
     final merged = _mergeService.merge(parsedLines);
-    final safeLines = merged
-        .where((line) => line.itemName.trim().isNotEmpty)
-        .toList();
+    final safeLines =
+    merged.where((e) => e.itemName.trim().isNotEmpty).toList();
 
     final draft = DraftInvoiceModel(
       invoiceType: invoiceType,
@@ -125,15 +257,15 @@ class VoiceParserService {
       invoiceDate: DateTime.now(),
       lines: safeLines.isEmpty
           ? [
-              InvoiceLineModel(
-                itemName: 'Review Item',
-                qty: 1,
-                unit: 'pcs',
-                rate: 0,
-                needsReview: true,
-                sourceText: 'No confident voice parse',
-              ),
-            ]
+        InvoiceLineModel(
+          itemName: 'Review Item',
+          qty: 1,
+          unit: 'pcs',
+          rate: 0,
+          needsReview: true,
+          sourceText: 'No confident voice parse',
+        ),
+      ]
           : safeLines,
     );
 
@@ -144,21 +276,20 @@ class VoiceParserService {
   }
 
   List<String> _splitIntoItemSegments(
-    String transcript,
-    List<ItemModel> dbItems,
-  ) {
+      String transcript,
+      List<ItemModel> dbItems,
+      ) {
+    final normalized = _normalizeForMatching(transcript);
     final aliasPositions = <_AliasHit>[];
-    final normalized = transcript.toLowerCase();
-
     final allAliases = <String>{};
 
     AppConstants.itemAliases.forEach((_, aliases) {
-      allAliases.addAll(aliases.map((e) => e.toLowerCase()));
+      allAliases.addAll(aliases.map((e) => _normalizeForMatching(e)));
     });
 
     for (final item in dbItems) {
-      allAliases.add(item.name.toLowerCase());
-      allAliases.addAll(item.aliases.map((e) => e.toLowerCase()));
+      allAliases.add(_normalizeForMatching(item.name));
+      allAliases.addAll(item.aliases.map((e) => _normalizeForMatching(e)));
     }
 
     for (final alias in allAliases) {
@@ -174,8 +305,12 @@ class VoiceParserService {
     aliasPositions.sort((a, b) => a.index.compareTo(b.index));
 
     if (aliasPositions.isEmpty) {
-      return transcript
-          .split(RegExp(r',|;|\n| and | next | phir | tarvata | aamele '))
+      return normalized
+          .split(
+        RegExp(
+          r',|;|\n| and | next | phir | tarvata | aamele | aur | mattu | mariyu ',
+        ),
+      )
           .map((e) => e.trim())
           .where((e) => e.isNotEmpty)
           .toList();
@@ -186,21 +321,50 @@ class VoiceParserService {
       final start = aliasPositions[i].index;
       final end = i < aliasPositions.length - 1
           ? aliasPositions[i + 1].index
-          : transcript.length;
+          : normalized.length;
 
-      final seg = transcript.substring(start, end).trim();
+      final seg = normalized.substring(start, end).trim();
       if (seg.isNotEmpty) {
         segments.add(seg);
       }
     }
-
     return segments;
+  }
+
+  String _normalizeForMatching(String value) {
+    var text = value.toLowerCase();
+
+    _scriptNormalization.forEach((key, replacement) {
+      text = text.replaceAll(key.toLowerCase(), replacement);
+    });
+
+    text = text
+        .replaceAll('&', ' and ')
+        .replaceAll(' plus ', ' and ')
+        .replaceAll(' then ', ' and ')
+        .replaceAll(' phir ', ' and ')
+        .replaceAll(' aur ', ' and ')
+        .replaceAll(' tarvata ', ' and ')
+        .replaceAll(' aamele ', ' and ')
+        .replaceAll(' mariyu ', ' and ')
+        .replaceAll(' mattu ', ' and ')
+        .replaceAll(' litre', ' ltr')
+        .replaceAll(' liter', ' ltr')
+        .replaceAll(' litres', ' ltr')
+        .replaceAll(' liters', ' ltr')
+        .replaceAll(' kilograms', ' kg')
+        .replaceAll(' kilogram', ' kg')
+        .replaceAll(' kilo', ' kg')
+        .replaceAll(' kgs', ' kg')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    return text;
   }
 
   String _detectUnit(String text, String fallback) {
     final t = text.toLowerCase();
-
-    if (RegExp(r'\b(ltr|litre|liter|liters|litres|lit|literu)\b').hasMatch(t)) {
+    if (RegExp(r'\b(ltr|litre|liter|liters|litres|lit)\b').hasMatch(t)) {
       return 'ltr';
     }
     if (RegExp(r'\b(kg|kgs|kilogram|kilograms|kilo)\b').hasMatch(t)) {
@@ -212,7 +376,6 @@ class VoiceParserService {
     if (RegExp(r'\b(pc|pcs|piece|pieces|packet|packets)\b').hasMatch(t)) {
       return 'pcs';
     }
-
     return fallback;
   }
 
@@ -222,7 +385,6 @@ class VoiceParserService {
     final qtyWithUnit = RegExp(
       r'(\d+(?:\.\d+)?)\s*(kg|kgs|kilogram|kilograms|kilo|ltr|litre|liter|liters|litres|g|gm|gms|gram|grams|pc|pcs|piece|pieces|packet|packets)\b',
     ).firstMatch(t);
-
     if (qtyWithUnit != null) {
       return double.tryParse(qtyWithUnit.group(1) ?? '') ?? 1.0;
     }
@@ -235,18 +397,17 @@ class VoiceParserService {
     if (t.contains('half') || t.contains('aadha') || t.contains('ardha')) {
       return 0.5;
     }
-
     return 1.0;
   }
 
   double? _detectRate(String text, double qty) {
     final t = text.toLowerCase();
 
-    final rateKeyword = RegExp(
+    final keyword = RegExp(
       r'\b(?:rate|price|amt|amount)\s*(?:is\s*)?(\d+(?:\.\d+)?)\b',
     ).firstMatch(t);
-    if (rateKeyword != null) {
-      return double.tryParse(rateKeyword.group(1) ?? '');
+    if (keyword != null) {
+      return double.tryParse(keyword.group(1) ?? '');
     }
 
     final nums = RegExp(r'(\d+(?:\.\d+)?)')
@@ -257,35 +418,42 @@ class VoiceParserService {
 
     if (nums.length <= 1) return null;
 
-    final candidates = nums.where((n) => (n - qty).abs() > 0.0001).toList();
+    final candidates = nums
+        .where((n) => (n - qty).abs() > 0.0001 && n > 0)
+        .toList();
+
     if (candidates.isEmpty) return null;
 
-    return candidates.lastWhere((n) => n > 0, orElse: () => candidates.last);
+    return candidates.last;
   }
 
   String _extractUnknownItemName(String text) {
     var t = text.toLowerCase();
 
     for (final noise in AppConstants.noiseWords) {
-      t = t.replaceAll(RegExp('\\b$noise\\b'), ' ');
+      t = t.replaceAll(RegExp('\\b${RegExp.escape(noise)}\\b'), ' ');
+    }
+    for (final token in _noiseTokens) {
+      t = t.replaceAll(RegExp('\\b${RegExp.escape(token)}\\b'), ' ');
     }
 
     t = t
         .replaceAll(RegExp(r'\b\d+(?:\.\d+)?\b'), ' ')
-        .replaceAll(
-          RegExp(
-            r'\b(kg|kgs|kilogram|kilograms|kilo|ltr|litre|liter|liters|litres|g|gm|gms|gram|grams|pc|pcs|piece|pieces|packet|packets|rate|price|amt|amount)\b',
-          ),
-          ' ',
-        )
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
 
     if (t.isEmpty) return '';
 
-    return t
+    final words = t
         .split(' ')
-        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
+        .where((w) => w.trim().isNotEmpty)
+        .take(3)
+        .toList();
+
+    if (words.isEmpty) return '';
+
+    return words
+        .map((w) => '${w[0].toUpperCase()}${w.substring(1)}')
         .join(' ');
   }
 
@@ -302,33 +470,17 @@ class VoiceParserService {
     var text = value.toLowerCase();
 
     for (final noise in AppConstants.noiseWords) {
-      text = text.replaceAll(RegExp('\\b$noise\\b'), ' ');
+      text = text.replaceAll(RegExp('\\b${RegExp.escape(noise)}\\b'), ' ');
     }
 
     _wordReplacements.forEach((key, replacement) {
-      final pattern = RegExp('\\b${RegExp.escape(key)}\\b');
-      text = text.replaceAll(pattern, replacement);
+      text = text.replaceAll(
+        RegExp('\\b${RegExp.escape(key)}\\b'),
+        replacement,
+      );
     });
 
-    text = text
-        .replaceAll(' litre', ' ltr')
-        .replaceAll(' liter', ' ltr')
-        .replaceAll(' litres', ' ltr')
-        .replaceAll(' liters', ' ltr')
-        .replaceAll(' kilograms', ' kg')
-        .replaceAll(' kilogram', ' kg')
-        .replaceAll(' kilo', ' kg')
-        .replaceAll(' kgs', ' kg')
-        .replaceAll('&', ' and ')
-        .replaceAll(' plus ', ' and ')
-        .replaceAll(' then ', ' and ')
-        .replaceAll(' phir ', ' and ')
-        .replaceAll(' tarvata ', ' and ')
-        .replaceAll(' aamele ', ' and ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-
-    return text;
+    return _normalizeForMatching(text);
   }
 
   String appendTranscript({
@@ -340,7 +492,6 @@ class VoiceParserService {
 
     if (chunk.isEmpty) return current;
     if (current.isEmpty) return chunk;
-
     if (current == chunk) return current;
     if (current.contains(chunk)) return current;
     if (chunk.contains(current)) return chunk;
@@ -360,9 +511,7 @@ class VoiceParserService {
     for (int len = maxLen; len >= 5; len--) {
       final aSuffix = a.substring(a.length - len).trim();
       final bPrefix = b.substring(0, len).trim();
-      if (aSuffix == bPrefix) {
-        return len;
-      }
+      if (aSuffix == bPrefix) return len;
     }
     return 0;
   }
@@ -372,5 +521,8 @@ class _AliasHit {
   final int index;
   final String alias;
 
-  _AliasHit({required this.index, required this.alias});
+  _AliasHit({
+    required this.index,
+    required this.alias,
+  });
 }
