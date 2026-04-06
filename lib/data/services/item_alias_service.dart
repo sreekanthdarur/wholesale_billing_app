@@ -15,9 +15,9 @@ class ItemAliasMatchResult {
 
 class ItemAliasService {
   ItemAliasMatchResult match(
-      String text, {
-        List<ItemModel> dbItems = const [],
-      }) {
+    String text, {
+    List<ItemModel> dbItems = const [],
+  }) {
     final normalized = _normalize(text);
 
     String? bestName;

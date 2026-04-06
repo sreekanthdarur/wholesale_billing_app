@@ -11,10 +11,7 @@ class VoiceParseResult {
   final DraftInvoiceModel draft;
   final List<MissingItemModel> missingItems;
 
-  const VoiceParseResult({
-    required this.draft,
-    required this.missingItems,
-  });
+  const VoiceParseResult({required this.draft, required this.missingItems});
 }
 
 class VoiceParserService {
@@ -55,6 +52,7 @@ class VoiceParserService {
   };
 
   static const Map<String, String> _scriptNormalization = {
+    // Hindi
     'राइस': 'rice',
     'चावल': 'rice',
     'शुगर': 'sugar',
@@ -74,7 +72,20 @@ class VoiceParserService {
     'कॉफी': 'coffee powder',
     'चाय पत्ती': 'tea powder',
     'डिटर्जेंट': 'detergent',
+    'इमली': 'tamarind',
+    'लाल मिर्च': 'red chilli',
+    'मिर्च': 'chilli',
+    'लालमिर्च': 'red chilli',
+    'केजी': 'kg',
+    'किलो': 'kg',
+    'किग्रा': 'kg',
+    'लीटर': 'ltr',
+    'पीस': 'pcs',
+    'पैकेट': 'pcs',
+    'रुपये': 'rate',
+    'रुपया': 'rate',
 
+    // Telugu
     'బియ్యం': 'rice',
     'రైస్': 'rice',
     'చక్కెర': 'sugar',
@@ -82,6 +93,7 @@ class VoiceParserService {
     'చిప్స్': 'chips',
     'నూనె': 'oil',
     'పప్పు': 'dal',
+    'కందిపప్పు': 'toor dal',
     'ఉప్పు': 'salt',
     'పాలు': 'milk',
     'పెరుగు': 'curd',
@@ -90,13 +102,25 @@ class VoiceParserService {
     'బిస్కెట్': 'biscuits',
     'కాఫీ': 'coffee powder',
     'టీ పొడి': 'tea powder',
+    'చింతపండు': 'tamarind',
+    'ఎర్ర మిర్చి': 'red chilli',
+    'మిర్చి': 'chilli',
+    'సంతూర్ సబ్బు': 'santoor soap',
+    'సండూర్ సబ్బు': 'santoor soap',
+    'కిలో': 'kg',
+    'లీటర్': 'ltr',
+    'పీస్': 'pcs',
+    'ప్యాకెట్': 'pcs',
+    'రేటు': 'rate',
 
+    // Kannada
     'ಸಕ್ಕರೆ': 'sugar',
     'ಅಕ್ಕಿ': 'rice',
     'ರೈಸ್': 'rice',
     'ಚಿಪ್ಸ್': 'chips',
     'ಎಣ್ಣೆ': 'oil',
     'ಬೇಳೆ': 'dal',
+    'ತೊಗರಿ ಬೇಳೆ': 'toor dal',
     'ಉಪ್ಪು': 'salt',
     'ಹಾಲು': 'milk',
     'ಮೊಸರು': 'curd',
@@ -105,22 +129,31 @@ class VoiceParserService {
     'ಬಿಸ್ಕಟ್': 'biscuits',
     'ಕಾಫಿ': 'coffee powder',
     'ಟೀ ಪುಡಿ': 'tea powder',
-
-    'किलो': 'kg',
-    'केजी': 'kg',
-    'किग्रा': 'kg',
-    'लीटर': 'ltr',
-    'पीस': 'pcs',
-    'पैकेट': 'pcs',
-    'रुपये': 'rate',
-    'రేటు': 'rate',
-    'కిలో': 'kg',
-    'లీటర్': 'ltr',
-    'పీస్': 'pcs',
-    'ಪೀಸ್': 'pcs',
+    'ಹುಣಸೆಹಣ್ಣು': 'tamarind',
+    'ಕೆಂಪು ಮೆಣಸಿನಕಾಯಿ': 'red chilli',
+    'ಮೆಣಸಿನಕಾಯಿ': 'chilli',
     'ಕಿಲೋ': 'kg',
     'ಲೀಟರ್': 'ltr',
+    'ಪೀಸ್': 'pcs',
+    'ಪ್ಯಾಕೆಟ್': 'pcs',
     'ದರ': 'rate',
+
+    // Phonetic / mixed
+    'imli': 'tamarind',
+    'lal mirch': 'red chilli',
+    'red mirchi': 'red chilli',
+    'santoor sabbu': 'santoor soap',
+    'sandhoor sabbu': 'santoor soap',
+    'sandur sabbu': 'santoor soap',
+    'sabbu': 'soap',
+    'kandi pappu': 'toor dal',
+    'kandipappu': 'toor dal',
+    'kandi ballu': 'toor dal',
+    'kandiballu': 'toor dal',
+    'kandi belu': 'toor dal',
+    'tur dal': 'toor dal',
+    'toor daal': 'toor dal',
+    'arhar dal': 'toor dal',
   };
 
   static const Set<String> _noiseTokens = {
@@ -182,6 +215,10 @@ class VoiceParserService {
     'and',
   };
 
+  String normalizeForDisplay(String value) {
+    return _normalizeForMatching(value);
+  }
+
   Future<VoiceParseResult> parseTranscript({
     required String transcript,
     String invoiceType = 'Cash',
@@ -196,8 +233,9 @@ class VoiceParserService {
 
     for (final rawSegment in segments) {
       final segment = _normalizeForMatching(rawSegment);
-      final alias = itemAliasService.match(segment, dbItems: dbItems);
+      if (segment.trim().isEmpty) continue;
 
+      final alias = itemAliasService.match(segment, dbItems: dbItems);
       final unit = _detectUnit(segment, alias.unit ?? 'kg');
       final qty = _detectQuantity(segment);
       final explicitRate = _detectRate(segment, qty);
@@ -245,8 +283,9 @@ class VoiceParserService {
     }
 
     final merged = _mergeService.merge(parsedLines);
-    final safeLines =
-    merged.where((e) => e.itemName.trim().isNotEmpty).toList();
+    final safeLines = merged
+        .where((e) => e.itemName.trim().isNotEmpty)
+        .toList();
 
     final draft = DraftInvoiceModel(
       invoiceType: invoiceType,
@@ -257,15 +296,15 @@ class VoiceParserService {
       invoiceDate: DateTime.now(),
       lines: safeLines.isEmpty
           ? [
-        InvoiceLineModel(
-          itemName: 'Review Item',
-          qty: 1,
-          unit: 'pcs',
-          rate: 0,
-          needsReview: true,
-          sourceText: 'No confident voice parse',
-        ),
-      ]
+              InvoiceLineModel(
+                itemName: 'Review Item',
+                qty: 1,
+                unit: 'pcs',
+                rate: 0,
+                needsReview: true,
+                sourceText: 'No confident voice parse',
+              ),
+            ]
           : safeLines,
     );
 
@@ -276,59 +315,76 @@ class VoiceParserService {
   }
 
   List<String> _splitIntoItemSegments(
-      String transcript,
-      List<ItemModel> dbItems,
-      ) {
+    String transcript,
+    List<ItemModel> dbItems,
+  ) {
     final normalized = _normalizeForMatching(transcript);
-    final aliasPositions = <_AliasHit>[];
-    final allAliases = <String>{};
 
-    AppConstants.itemAliases.forEach((_, aliases) {
-      allAliases.addAll(aliases.map((e) => _normalizeForMatching(e)));
-    });
+    // Primary split by separators first, so unknown items are preserved.
+    final coarseSegments = normalized
+        .split(
+          RegExp(
+            r',|;|\n| and | next | phir | tarvata | aamele | aur | mattu | mariyu ',
+          ),
+        )
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
 
-    for (final item in dbItems) {
-      allAliases.add(_normalizeForMatching(item.name));
-      allAliases.addAll(item.aliases.map((e) => _normalizeForMatching(e)));
-    }
+    final finalSegments = <String>[];
 
-    for (final alias in allAliases) {
-      int startIndex = 0;
-      while (true) {
-        final idx = normalized.indexOf(alias, startIndex);
-        if (idx < 0) break;
-        aliasPositions.add(_AliasHit(index: idx, alias: alias));
-        startIndex = idx + alias.length;
+    for (final coarse in coarseSegments) {
+      final aliasPositions = <_AliasHit>[];
+      final allAliases = <String>{};
+
+      AppConstants.itemAliases.forEach((_, aliases) {
+        allAliases.addAll(aliases.map((e) => _normalizeForMatching(e)));
+      });
+
+      for (final item in dbItems) {
+        allAliases.add(_normalizeForMatching(item.name));
+        allAliases.addAll(item.aliases.map((e) => _normalizeForMatching(e)));
+      }
+
+      for (final alias in allAliases) {
+        int startIndex = 0;
+        while (true) {
+          final idx = coarse.indexOf(alias, startIndex);
+          if (idx < 0) break;
+          aliasPositions.add(_AliasHit(index: idx, alias: alias));
+          startIndex = idx + alias.length;
+        }
+      }
+
+      aliasPositions.sort((a, b) => a.index.compareTo(b.index));
+
+      if (aliasPositions.isEmpty) {
+        finalSegments.add(coarse);
+        continue;
+      }
+
+      // Preserve text before first alias if meaningful
+      if (aliasPositions.first.index > 0) {
+        final prefix = coarse.substring(0, aliasPositions.first.index).trim();
+        if (prefix.isNotEmpty) {
+          finalSegments.add(prefix);
+        }
+      }
+
+      for (int i = 0; i < aliasPositions.length; i++) {
+        final start = aliasPositions[i].index;
+        final end = i < aliasPositions.length - 1
+            ? aliasPositions[i + 1].index
+            : coarse.length;
+
+        final seg = coarse.substring(start, end).trim();
+        if (seg.isNotEmpty) {
+          finalSegments.add(seg);
+        }
       }
     }
 
-    aliasPositions.sort((a, b) => a.index.compareTo(b.index));
-
-    if (aliasPositions.isEmpty) {
-      return normalized
-          .split(
-        RegExp(
-          r',|;|\n| and | next | phir | tarvata | aamele | aur | mattu | mariyu ',
-        ),
-      )
-          .map((e) => e.trim())
-          .where((e) => e.isNotEmpty)
-          .toList();
-    }
-
-    final segments = <String>[];
-    for (int i = 0; i < aliasPositions.length; i++) {
-      final start = aliasPositions[i].index;
-      final end = i < aliasPositions.length - 1
-          ? aliasPositions[i + 1].index
-          : normalized.length;
-
-      final seg = normalized.substring(start, end).trim();
-      if (seg.isNotEmpty) {
-        segments.add(seg);
-      }
-    }
-    return segments;
+    return finalSegments.where((e) => e.trim().isNotEmpty).toList();
   }
 
   String _normalizeForMatching(String value) {
@@ -452,15 +508,14 @@ class VoiceParserService {
 
     if (words.isEmpty) return '';
 
-    return words
-        .map((w) => '${w[0].toUpperCase()}${w.substring(1)}')
-        .join(' ');
+    return words.map((w) => '${w[0].toUpperCase()}${w.substring(1)}').join(' ');
   }
 
   List<MissingItemModel> _dedupeMissing(List<MissingItemModel> items) {
     final map = <String, MissingItemModel>{};
     for (final item in items) {
-      final key = item.itemName.trim().toLowerCase();
+      final key =
+          '${item.itemName.trim().toLowerCase()}|${item.sourceText.trim().toLowerCase()}';
       map[key] = item;
     }
     return map.values.toList();
@@ -521,8 +576,5 @@ class _AliasHit {
   final int index;
   final String alias;
 
-  _AliasHit({
-    required this.index,
-    required this.alias,
-  });
+  _AliasHit({required this.index, required this.alias});
 }

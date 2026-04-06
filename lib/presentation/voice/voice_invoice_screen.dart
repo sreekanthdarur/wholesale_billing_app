@@ -164,6 +164,32 @@ class _VoiceInvoiceScreenState extends State<VoiceInvoiceScreen> {
         line.amount > 0;
   }
 
+  bool _isValidDraftLine(InvoiceLineModel line) {
+    return line.itemName.trim().isNotEmpty &&
+        line.itemName.trim().toLowerCase() != 'review item' &&
+        line.qty > 0 &&
+        line.rate > 0 &&
+        line.amount > 0;
+  }
+
+  Future<List<InvoiceLineModel>> _collectManualLines(
+    List<InvoiceLineModel> existingLines,
+    List<InvoiceLineModel> manualLines,
+  ) async {
+    final combined = <InvoiceLineModel>[
+      ...existingLines.where(_isValidDraftLine),
+      ...manualLines.where(_isValidManualLine),
+    ];
+
+    if (combined.isEmpty) {
+      return <InvoiceLineModel>[];
+    }
+
+    final merged = invoiceLineMergeService.merge(combined);
+
+    return merged.where((e) => _isValidDraftLine(e)).toList();
+  }
+
   Future<void> _buildDraft() async {
     final transcript = transcriptController.text.trim();
     if (transcript.isEmpty) {
@@ -188,6 +214,7 @@ class _VoiceInvoiceScreenState extends State<VoiceInvoiceScreen> {
     if (result.missingItems.isNotEmpty) {
       final manualLines = await showDialog<List<InvoiceLineModel>>(
         context: context,
+        barrierDismissible: false,
         builder: (_) =>
             MissingItemsPriceDialog(missingItems: result.missingItems),
       );
@@ -208,14 +235,10 @@ class _VoiceInvoiceScreenState extends State<VoiceInvoiceScreen> {
           );
         }
 
-        final baseLines = result.draft.lines
-            .where((e) => e.itemName != 'Review Item' && _isValidManualLine(e))
-            .toList();
-
-        final merged = invoiceLineMergeService.merge([
-          ...baseLines,
-          ...validManualLines,
-        ]);
+        final finalLines = await _collectManualLines(
+          result.draft.lines,
+          validManualLines,
+        );
 
         result = VoiceParseResult(
           draft: DraftInvoiceModel(
@@ -225,7 +248,7 @@ class _VoiceInvoiceScreenState extends State<VoiceInvoiceScreen> {
             notes: result.draft.notes,
             rawInputText: result.draft.rawInputText,
             invoiceDate: result.draft.invoiceDate,
-            lines: merged.isEmpty ? validManualLines : merged,
+            lines: finalLines.isEmpty ? validManualLines : finalLines,
           ),
           missingItems: const [],
         );
@@ -234,10 +257,35 @@ class _VoiceInvoiceScreenState extends State<VoiceInvoiceScreen> {
 
     if (!mounted) return;
 
+    final finalPreviewLines = result.draft.lines
+        .where(_isValidDraftLine)
+        .toList();
+
+    if (finalPreviewLines.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No valid invoice items were prepared. Please review the transcript or add valid quantity and price for missing items.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final finalDraft = DraftInvoiceModel(
+      invoiceType: result.draft.invoiceType,
+      customerName: result.draft.customerName,
+      sourceMode: result.draft.sourceMode,
+      notes: result.draft.notes,
+      rawInputText: result.draft.rawInputText,
+      invoiceDate: result.draft.invoiceDate,
+      lines: finalPreviewLines,
+    );
+
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => InvoicePreviewScreen(initialDraft: result.draft),
+        builder: (_) => InvoicePreviewScreen(initialDraft: finalDraft),
       ),
     );
   }
