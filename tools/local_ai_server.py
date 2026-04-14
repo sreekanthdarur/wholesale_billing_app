@@ -11,6 +11,9 @@ from flask import Flask, jsonify, request
 from PIL import Image
 from google.cloud import vision
 
+USE_GOOGLE_OCR = os.environ.get("USE_GOOGLE_OCR", "true") == "true"
+API_KEY = os.environ.get("LOCAL_API_KEY", "mysecret123")
+
 try:
     from paddleocr import PaddleOCR
 except Exception:
@@ -30,8 +33,35 @@ WHISPER_COMPUTE_TYPE = os.environ.get("WHISPER_COMPUTE_TYPE", "int8")
 
 app = Flask(__name__)
 
-def _google_document_ocr(image_bytes: bytes):
+def _google_document_ocr(image_bytes: bytes) -> dict:
     client = vision.ImageAnnotatorClient()
+    image = vision.Image(content=image_bytes)
+
+    response = client.document_text_detection(image=image)
+
+    if response.error.message:
+        raise RuntimeError(response.error.message)
+
+    full_text = response.full_text_annotation.text if response.full_text_annotation else ""
+
+    lines = []
+    if response.full_text_annotation:
+        for page in response.full_text_annotation.pages:
+            for block in page.blocks:
+                for paragraph in block.paragraphs:
+                    words = []
+                    for word in paragraph.words:
+                        token = "".join([s.text for s in word.symbols])
+                        if token:
+                            words.append(token)
+                    line_text = " ".join(words).strip()
+                    if line_text:
+                        lines.append(line_text)
+
+    return {
+        "text": full_text.strip(),
+        "lines": lines,
+    }
 
 def _json_error(message: str, status: int = 400):
     return jsonify({"ok": False, "message": message}), status
@@ -562,6 +592,9 @@ def health():
 @app.route("/ocr", methods=["POST"])
 def ocr():
     payload = request.get_json(silent=True) or {}
+    client_key = request.headers.get("x-api-key")
+    if client_key != API_KEY:
+        return _json_error("Unauthorized", 401)
     image_base64 = payload.get("image_base64")
     language = payload.get("language", "en")
 
